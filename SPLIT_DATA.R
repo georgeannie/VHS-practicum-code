@@ -1,4 +1,7 @@
-# Load required packages.
+###########################################################################################################
+#                 SPLIT FILES TO AVOID DUPLICATE AND ENABLE EASY MODELING                                 #
+#                             LOAD POSTGRES TABLE IN AWS                                                  #
+###########################################################################################################
 library(janitor)
 library(lubridate)
 library(hms)
@@ -11,6 +14,15 @@ library(RcppRoll)
 library(dplyr)
 library(tibble)
 library(bit64)
+#-------------------Connect to DB -------------------------------# 
+library('RPostgreSQL')
+source("aws_rds_access.R")
+pg = dbDriver("PostgreSQL")
+con=dbConnect(pg, 
+              dbname = "vhs",
+              host=host,
+              user = user, 
+              password = password)
 
 #-----------------READ THE COMBINED TRAUMA DATA - GEMS AND HEMS AND REMOVE COLUMNS--------------------------#
 trauma=read.csv("/home/rstudio/trauma/output/trauma.csv" , 
@@ -42,6 +54,9 @@ trauma_patient_motor_safety = trauma[, c("incident_id", "airbag_deployment_tr29_
   filter(!is.na(airbag_deployment_tr29_32) | !is.na(safety_device_used_tr29_24)) %>%
   group_by(incident_id, airbag_deployment_tr29_32, safety_device_used_tr29_24)
 
+dbSendQuery(con, "drop table trauma_patient_motor_safety")
+dbWriteTable(con,c('trauma_patient_motor_safety'), value=trauma_patient_motor_safety, row.names=FALSE)
+
 #-----------------SEPARATE ALCOHOL AND DRUG RELATED CASES----------------------------------------------#
 trauma_patient_alcohol_drug = trauma[,c("incident_id", "alcohol_intervention_alcohol_screen_tr18_46",
                                         "drug_use_indicator_tr18_45")] %>%
@@ -61,14 +76,21 @@ trauma_patient_alcohol_drug = trauma[,c("incident_id", "alcohol_intervention_alc
                                              `Yes (confirmed by test [prescription drug])` = "Yes", 
                                              `No (confirmed by test)` = "No")) %>%
   filter(!is.na(alcohol_intervention_alcohol_screen_tr18_46) | !is.na(drug_use_indicator_tr18_45)) %>%
+  distinct(.keep_all = TRUE) %>%
   group_by(incident_id, alcohol_intervention_alcohol_screen_tr18_46,
            drug_use_indicator_tr18_45) 
 
+dbSendQuery(con, "drop table trauma_patient_alcohol_drug")
+dbWriteTable(con,c('trauma_patient_alcohol_drug'), value=trauma_patient_alcohol_drug, row.names=FALSE)
+
 #-----------------------------SEPARATE MULTIPLE COMORBIDITY CONDITIONS FOR A INCIDENT ID---------------------#
-  trauma_comorbidity = trauma[,c("incident_id", "co_morbidity_condition_tr21_21")] %>%
+trauma_comorbidity = trauma[,c("incident_id", "co_morbidity_condition_tr21_21")] %>%
     distinct(.keep_all = TRUE) %>%
     filter(!is.na(co_morbidity_condition_tr21_21))
-    
+
+dbSendQuery(con, "drop table trauma_comorbidity")
+dbWriteTable(con,c('trauma_comorbidity'), value=trauma_comorbidity, row.names=FALSE)
+
 #---------------------------- GET ALL ICD10 CODES FOR A CASE ----------------------------------------# 
  trauma_icd10_diagnosis = trauma %>%
     select(incident_id, icd_10_diagnosis_codes_list) %>%
@@ -80,7 +102,10 @@ trauma_patient_alcohol_drug = trauma[,c("incident_id", "alcohol_intervention_alc
                   "icd10_33", "icd10_34", "icd10_35", "icd10_36", "icd10_37", "icd10_38", "icd10_39", "icd10_40"), sep = "\\s*\\,\\s*", convert = TRUE) %>%
     gather(key, value, icd10_1:icd10_40, na.rm = TRUE, convert = TRUE) %>%
     select(-key)   
-  
+
+ dbSendQuery(con, "drop table trauma_icd10_diagnosis")
+ dbWriteTable(con,c('trauma_icd10_diagnosis'), value=trauma_icd10_diagnosis, row.names=FALSE)
+ 
 #-----------------------GET UNIQUE ICD10 DESC FOR A CASE -------------------------------------------# 
  trauma_code_desc= trauma %>%
    select(icd_10_diagnosis_detail_description_tr200_1) %>%
@@ -91,6 +116,9 @@ trauma_patient_alcohol_drug = trauma[,c("incident_id", "alcohol_intervention_alc
    mutate(code=substr(icd_10_diagnosis_detail_description_tr200_1,
           2, 
           regexpr(")", icd_10_diagnosis_detail_description_tr200_1)-1))
+ 
+ dbSendQuery(con, "drop table trauma_code_desc")
+ dbWriteTable(con,c('trauma_code_desc'), value=trauma_code_desc, row.names=FALSE)
  
 #----------------------------- TRAUMA PATIENT ED DETAILS -------------------------------------------#
 trauma_patient_ed=trauma %>%
@@ -115,6 +143,13 @@ trauma_patient_ed=trauma %>%
           location, patient_age_tr1_12, patient_age_units_tr1_14, patient_ethnicity_tr1_17, 
           patient_gender_tr1_15, transport_to_your_facility_by_tr8_8) %>%
    distinct(.keep_all = TRUE)
+
+trauma_patient_ed = left_join(trauma_patient_ed, trauma_ems_service, by="incident_id")
+
+trauma_patient_ed = left_join(trauma_patient_ed, trauma_facility_name, by="incident_id")
+
+dbSendQuery(con, "drop table trauma_patient_ed")
+dbWriteTable(con,c('trauma_patient_ed'), value=trauma_patient_ed, row.names=FALSE)
 
 #---------------------TRAUMA INCIDENT TIMES - REMOVE NULL DATES IN DUPLICATE INCIDENTS -------------# 
 trauma_incident_unique=trauma %>%
@@ -147,6 +182,9 @@ trauma_incident_unique_1=trauma_incident_unique_1[,order(names(trauma_incident_u
 
 trauma_incident = rbind(trauma_incident_unique_1, as.data.frame(trauma_incident_dup)) 
 
+dbSendQuery(con, "drop table trauma_incident")
+dbWriteTable(con,c('trauma_incident'), value=trauma_incident, row.names=FALSE)
+
 #-----------------PREHOSPITAL --------------------------------#
 trauma_prehospital_unique=trauma%>%
   select(incident_id, prehospital_gcs_total_manual_tr18_64, 
@@ -176,5 +214,19 @@ trauma_prehospital_unique_1= trauma_prehospital_unique[!trauma_prehospital_uniqu
 trauma_prehospital = rbind(trauma_prehospital_unique_1, 
                            setNames(as.data.frame(trauma_prehospital_dup), names(trauma_prehospital_unique_1))) 
 
+trauma_prehospital = left_join(trauma_prehospital, trauma_patient_alcohol_drug, by='incident_id')
+
+dbSendQuery(con, "drop table trauma_prehospital")
+dbWriteTable(con,c('trauma_prehospital'), value=trauma_prehospital, row.names=FALSE)
+
+#---------------------INITIAL ASSESSMENT ---------------------------------------#
+initial_assessment= trauma %>%
+  select(incident_id,  initial_assessment_respiratory_assistance)%>%
+  distinct(.keep_all = TRUE) %>%
+  filter(!is.na(initial_assessment_respiratory_assistance))
+  group_by(incident_id) 
+  
+dbSendQuery(con, "drop table initial_respiratory")
+dbWriteTable(con,c('initial_respiratory'), value=initial_assessment, row.names=FALSE)
 
 
