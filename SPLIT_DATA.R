@@ -16,7 +16,7 @@ library(tibble)
 library(bit64)
 #-------------------Connect to DB -------------------------------# 
 library('RPostgreSQL')
-source("aws_rds_access.R")
+source("/home/rstudio/R/aws_rds_access.R")
 pg = dbDriver("PostgreSQL")
 con=dbConnect(pg, 
               dbname = "vhs",
@@ -187,21 +187,28 @@ dbWriteTable(con,c('trauma_incident'), value=trauma_incident, row.names=FALSE)
 
 #-----------------PREHOSPITAL --------------------------------#
 trauma_prehospital_unique=trauma%>%
-  select(incident_id, prehospital_gcs_total_manual_tr18_64, 
+  select(incident_id, prehospital_gcs_eye, prehospital_gcs_motor,
+         prehospital_gcs_verbal, prehospital_gcs_total_manual_tr18_64, 
          prehospital_pulse_oximetry_tr18_82, 
          prehospital_pulse_rate_tr18_69, 
          prehospital_respiratory_rate_tr18_70, 
          prehospital_sbp_tr18_67) %>%
   distinct(.keep_all = TRUE)
 
+###### GET DUPLICATES ############
 trauma_prehospital_dup=trauma%>%
-  select(incident_id, prehospital_gcs_total_manual_tr18_64, 
+  select(incident_id, prehospital_gcs_eye, prehospital_gcs_motor,
+         prehospital_gcs_verbal,
+         prehospital_gcs_total_manual_tr18_64, 
          prehospital_pulse_oximetry_tr18_82, 
          prehospital_pulse_rate_tr18_69, 
          prehospital_respiratory_rate_tr18_70, 
          prehospital_sbp_tr18_67) %>%
   distinct(.keep_all = TRUE) %>%
-  get_dupes(incident_id) %>%
+  get_dupes(incident_id) 
+
+############ GET MEAN VALUE OF NUMERICALS ###########
+trauma_prehospital_summary=trauma_prehospital_dup %>%
   group_by(incident_id) %>%
   summarize(prehospital_gcs_total_manual_mean = round(mean(prehospital_gcs_total_manual_tr18_64, na.rm = TRUE)), 
             prehospital_pulse_oximetry_mean = round(mean(prehospital_pulse_oximetry_tr18_82, na.rm = TRUE)), 
@@ -209,10 +216,29 @@ trauma_prehospital_dup=trauma%>%
             prehospital_respiratory_rate_mean = round(mean(prehospital_respiratory_rate_tr18_70, na.rm = TRUE)), 
             prehospital_sbp_mean = round(mean(prehospital_sbp_tr18_67, na.rm = TRUE)))
 
-trauma_prehospital_unique_1= trauma_prehospital_unique[!trauma_prehospital_unique$incident_id %in% trauma_prehospital_dup$incident_id,]
+###GET UNIQUE VALUE OF GCS EYE, MOTOR, VERBAL AND JOIN WITH SUMMARY ########33
+trauma_prehospital_dup_1 = trauma_prehospital_dup %>% 
+  select(incident_id, prehospital_gcs_eye, prehospital_gcs_motor,
+           prehospital_gcs_verbal) %>%
+  distinct(.keep_all = TRUE) %>%
+  filter(!is.na(prehospital_gcs_eye) & !is.na(prehospital_gcs_eye) & 
+           !is.na(prehospital_gcs_eye)) %>%
+  filter(!prehospital_gcs_eye=='Not Applicable' & 
+         !prehospital_gcs_motor == 'Not Applicable' & 
+         !prehospital_gcs_verbal == 'Not Applicable') %>%
+  filter(!prehospital_gcs_eye=='Not Known' & 
+           !prehospital_gcs_motor == 'Not Known' & 
+           !prehospital_gcs_verbal == 'Not Known') %>%
+  filter(!prehospital_gcs_eye=='Not Known/Not Recorded' & 
+           !prehospital_gcs_motor == 'Not Known/Not Recorded' & 
+           !prehospital_gcs_verbal == 'Not Known/Not Recorded') %>%
+  right_join(trauma_prehospital_summary, by="incident_id")
+
+############REMOVE ALL INCIDENT IDS FROM UNIQUE DF TO COMBINE WITH DUPLICATE DF #######            
+trauma_prehospital_unique_1= trauma_prehospital_unique[!trauma_prehospital_unique$incident_id %in% trauma_prehospital_dup_1$incident_id,]
 
 trauma_prehospital = rbind(trauma_prehospital_unique_1, 
-                           setNames(as.data.frame(trauma_prehospital_dup), names(trauma_prehospital_unique_1))) 
+                           setNames(as.data.frame(trauma_prehospital_dup_1), names(trauma_prehospital_unique_1))) 
 
 trauma_prehospital = left_join(trauma_prehospital, trauma_patient_alcohol_drug, by='incident_id')
 
@@ -223,7 +249,7 @@ dbWriteTable(con,c('trauma_prehospital'), value=trauma_prehospital, row.names=FA
 initial_assessment= trauma %>%
   select(incident_id,  initial_assessment_respiratory_assistance)%>%
   distinct(.keep_all = TRUE) %>%
-  filter(!is.na(initial_assessment_respiratory_assistance))
+  filter(!is.na(initial_assessment_respiratory_assistance)) %>%
   group_by(incident_id) 
   
 dbSendQuery(con, "drop table initial_respiratory")

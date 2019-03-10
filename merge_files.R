@@ -67,7 +67,7 @@ trauma_gems2 = merge(trauma_gems1, trauma_part3_gems, by="incident_id")
 trauma_gems_all2=trauma_gems2[,order(names(trauma_gems2))]
 
 #----------------CLEAN DATA TO MATCH HEMS --------------------#
-trauma_gems_clean=trauma_gems_all2[,-c(16, 23, 24, 26, 37, 40, 41, 63, 64, 66)]
+trauma_gems_clean=trauma_gems_all2[,-c(16, 23, 24, 26, 37, 40, 41)]
 
 #-----------------get injury zip for gems data ----------------------#
 zip=read.csv("/home/rstudio/trauma/input/trauma_zip.csv",   header = TRUE,  
@@ -87,11 +87,18 @@ trauma_hems = read.csv("/home/rstudio/trauma/hems/Truama_Registry_all_data2.csv"
 names(trauma_hems) <- sub("_e_.*", "", names(trauma_hems))
 
 #--------------REORDER COLUMN NAMES ALPHABETICALLY -----#
+#-------------(SHOULD BE UPDATED WHEN THE NEW DATA IS RECEIVED FOR HEMS) -----#
+trauma_hems$prehospital_gcs_eye = NA
+trauma_hems$prehospital_gcs_motor=NA
+trauma_hems$prehospital_gcs_verbal=NA
 trauma_hems=trauma_hems[,order(names(trauma_hems))]
 
 #-------------------CLEAN/REORDER DATA TO MATCH GEMS AND ARRANGE ALPHABETICALY -------#
-trauma_hems_clean=trauma_hems[,-c(23,27,30,31, 61)]
-trauma_hems_clean=trauma_hems_clean[,c(1:44, 46:65, 45)]
+trauma_hems_clean=trauma_hems[,!names(trauma_hems) %in% c("hospital_discharge_date_time",
+                                                          "hospital_discharge_orders_written_time_tr25_94",
+                                                          "icd_9_procedure_date_tr22_5",
+                                                          "icd_9_procedure_time_tr22_31",
+                                                          "patient_state_tr1_23")]
 trauma_hems_clean=trauma_hems_clean[,order(names(trauma_hems_clean))]
 
 #-----------------COMBINE HEMS AND GEMS ----------------------#
@@ -100,13 +107,13 @@ trauma = rbind(trauma_hems_clean,
 
 #----------ICD10, FACILITY NAME AND OTHER DATA -----------#
 icd10 = read.csv("/home/rstudio/trauma/input/icd10.csv" , 
-                   header = TRUE,  na.strings=c(""," ", "NA"), 
+                 header = TRUE,  na.strings=c(""," ", "NA"), 
                  stringsAsFactors = FALSE)%>%
-                 clean_names() 
+  clean_names() 
 
 #------------------MERGER WITH ICD10, FACILITY NAME DATA ---------#
 trauma_icd10=left_join(trauma, icd10, by='incident_id') %>%
   distinct()
 
-setwd("/home/rstudio/trauma/")
+setwd("/home/rstudio/trauma/output")
 write.csv(trauma_icd10, 'trauma.csv')
