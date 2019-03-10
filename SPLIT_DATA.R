@@ -13,8 +13,8 @@ library(tibble)
 library(bit64)
 
 #-----------------READ THE COMBINED TRAUMA DATA - GEMS AND HEMS AND REMOVE COLUMNS--------------------------#
-trauma=read.csv("C:\\Users\\User\\Desktop\\DAPT Semester 4\\VCU-HS\\data\\Reformed data I\\trauma.csv" , 
-                header = TRUE,  na.strings=c(""," ", "NA"), stringsAsFactors = FALSE, nrows=2000) %>%
+trauma=read.csv("/home/rstudio/trauma/output/trauma.csv" , 
+                header = TRUE,  na.strings=c(""," ", "NA"), stringsAsFactors = FALSE) %>%
    clean_names() %>%
   select(-iss_manual) %>%
   select(-ventilator_details_tr26_76)
@@ -90,7 +90,7 @@ trauma_patient_alcohol_drug = trauma[,c("incident_id", "alcohol_intervention_alc
                         length(icd_10_diagnosis_detail_description_tr200_1))) %>%
    mutate(code=substr(icd_10_diagnosis_detail_description_tr200_1,
           2, 
-          regexpr(")", icd_10_diagnosis_detail_description_tr200_1)))
+          regexpr(")", icd_10_diagnosis_detail_description_tr200_1)-1))
  
 #----------------------------- TRAUMA PATIENT ED DETAILS -------------------------------------------#
 trauma_patient_ed=trauma %>%
@@ -139,10 +139,13 @@ trauma_incident_dup=trauma %>%
   get_dupes(incident_id) %>%
   group_by(incident_id) %>%
   filter(!is.na(ems_unit_notified_date_tr9_1))
+trauma_incident_dup=trauma_incident_dup[,!names(trauma_incident_dup) %in% c("dupe_count")]
+trauma_incident_dup=trauma_incident_dup[,order(names(trauma_incident_dup))]
 
 trauma_incident_unique_1= trauma_incident_unique[!trauma_incident_unique$incident_id %in% trauma_incident_dup$incident_id,]
+trauma_incident_unique_1=trauma_incident_unique_1[,order(names(trauma_incident_unique_1))]
 
-trauma_incident = rbind(trauma_incident_unique_1, trauma_incident_dup) 
+trauma_incident = rbind(trauma_incident_unique_1, as.data.frame(trauma_incident_dup)) 
 
 #-----------------PREHOSPITAL --------------------------------#
 trauma_prehospital_unique=trauma%>%
@@ -162,16 +165,16 @@ trauma_prehospital_dup=trauma%>%
   distinct(.keep_all = TRUE) %>%
   get_dupes(incident_id) %>%
   group_by(incident_id) %>%
-  summarize(prehospital_gcs_total_manual_mean = mean(prehospital_gcs_total_manual_tr18_64, na.rm = TRUE), 
-            prehospital_pulse_oximetry_mean = mean(prehospital_pulse_oximetry_tr18_82, na.rm = TRUE), 
-            prehospital_pulse_rate_mean = mean(prehospital_pulse_rate_tr18_69, na.rm = TRUE), 
-            prehospital_respiratory_rate_mean = mean(prehospital_respiratory_rate_tr18_70, na.rm = TRUE), 
-            prehospital_sbp_mean = mean(prehospital_sbp_tr18_67, na.rm = TRUE))
+  summarize(prehospital_gcs_total_manual_mean = round(mean(prehospital_gcs_total_manual_tr18_64, na.rm = TRUE)), 
+            prehospital_pulse_oximetry_mean = round(mean(prehospital_pulse_oximetry_tr18_82, na.rm = TRUE)), 
+            prehospital_pulse_rate_mean = round(mean(prehospital_pulse_rate_tr18_69, na.rm = TRUE)), 
+            prehospital_respiratory_rate_mean = round(mean(prehospital_respiratory_rate_tr18_70, na.rm = TRUE)), 
+            prehospital_sbp_mean = round(mean(prehospital_sbp_tr18_67, na.rm = TRUE)))
 
 trauma_prehospital_unique_1= trauma_prehospital_unique[!trauma_prehospital_unique$incident_id %in% trauma_prehospital_dup$incident_id,]
 
 trauma_prehospital = rbind(trauma_prehospital_unique_1, 
-                           setNames(trauma_hospital_dup, names(trauma_prehospital_unique_1))) 
+                           setNames(as.data.frame(trauma_prehospital_dup), names(trauma_prehospital_unique_1))) 
 
 
 
