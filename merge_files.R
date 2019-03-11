@@ -115,5 +115,14 @@ icd10 = read.csv("/home/rstudio/trauma/input/icd10.csv" ,
 trauma_icd10=left_join(trauma, icd10, by='incident_id') %>%
   distinct()
 
+
+#-------------MERGE WITH HEMS FACILTY, EMS, GCS -------------------#
+new_file = read.csv("/home/rstudio/trauma/input/Hems GCS-facility.csv" , 
+                 header = TRUE,  na.strings=c(""," ", "NA"), 
+                 stringsAsFactors = FALSE)%>%
+  clean_names()  %>%
+  right_join(trauma_icd10, by='incident_id') %>%
+  distinct()
+
 setwd("/home/rstudio/trauma/output")
-write.csv(trauma_icd10, 'trauma.csv')
+write.csv(new_file, 'trauma.csv')
