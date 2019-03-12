@@ -5,6 +5,7 @@
 library(janitor)
 library(tidyr)
 library(dplyr)
+library(plyr)
 #Function to merge files for GEMS
 merge_files =function (file_list){
   for (file in file_list){
@@ -84,13 +85,18 @@ trauma_gems_clean_zip=trauma_gems_clean_zip[,order(names(trauma_gems_clean_zip))
 trauma_hems = read.csv("/home/rstudio/trauma/hems/Truama_Registry_all_data2.csv" , 
                        header = TRUE,  na.strings=c(""," ", "NA"), stringsAsFactors = FALSE)%>%
   clean_names() 
+trauma_hems=rename(trauma_hems, "ems_service_name_tr7_3.y" = "ems_service_name_tr7_3")
 names(trauma_hems) <- sub("_e_.*", "", names(trauma_hems))
 
 #--------------REORDER COLUMN NAMES ALPHABETICALLY -----#
 #-------------(SHOULD BE UPDATED WHEN THE NEW DATA IS RECEIVED FOR HEMS) -----#
-trauma_hems$prehospital_gcs_eye = NA
-trauma_hems$prehospital_gcs_motor=NA
-trauma_hems$prehospital_gcs_verbal=NA
+trauma_hems = read.csv("/home/rstudio/trauma/input/Hems GCS-facility.csv" , 
+                    header = TRUE,  na.strings=c(""," ", "NA"), 
+                    stringsAsFactors = FALSE)%>%
+  clean_names()  %>%
+  right_join(trauma_hems, by='incident_id') %>%
+  distinct()
+
 trauma_hems=trauma_hems[,order(names(trauma_hems))]
 
 #-------------------CLEAN/REORDER DATA TO MATCH GEMS AND ARRANGE ALPHABETICALY -------#
@@ -98,8 +104,11 @@ trauma_hems_clean=trauma_hems[,!names(trauma_hems) %in% c("hospital_discharge_da
                                                           "hospital_discharge_orders_written_time_tr25_94",
                                                           "icd_9_procedure_date_tr22_5",
                                                           "icd_9_procedure_time_tr22_31",
-                                                          "patient_state_tr1_23")]
+                                                          "patient_state_tr1_23",
+                                                          "ems_service_name_tr7_3.x")]
+
 trauma_hems_clean=trauma_hems_clean[,order(names(trauma_hems_clean))]
+
 
 #-----------------COMBINE HEMS AND GEMS ----------------------#
 trauma = rbind(trauma_hems_clean, 
@@ -117,12 +126,6 @@ trauma_icd10=left_join(trauma, icd10, by='incident_id') %>%
 
 
 #-------------MERGE WITH HEMS FACILTY, EMS, GCS -------------------#
-new_file = read.csv("/home/rstudio/trauma/input/Hems GCS-facility.csv" , 
-                 header = TRUE,  na.strings=c(""," ", "NA"), 
-                 stringsAsFactors = FALSE)%>%
-  clean_names()  %>%
-  right_join(trauma_icd10, by='incident_id') %>%
-  distinct()
 
 setwd("/home/rstudio/trauma/output")
 write.csv(new_file, 'trauma.csv')
