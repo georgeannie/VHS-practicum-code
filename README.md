@@ -4,6 +4,7 @@ VHS-project
 2. Split_data - splits the datasets to avoid duplicate rows and clean the data. It also loads the data
 3. Load_external_data - load the zip code files and all other external data
 4. merge_prehospital - merge and load prehospital data for incident times 
+5. Feature engineering - outline to add features to patient_ed table 
 
 
 Functions
