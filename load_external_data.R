@@ -22,7 +22,7 @@ con=dbConnect(pg,
               password = password)
 
 #-----------------READ ZIP CODES FOR RURAL/URBAN FLAG --------------------------#
-zip=read.csv("/home/rstudio/trauma/zip_rural.csv" , 
+zip=read.csv("/home/rstudio/trauma/input/rural.csv" , 
                 header = TRUE,  na.strings=c(""," ", "NA"), stringsAsFactors = FALSE) %>%
    clean_names() 
 

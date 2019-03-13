@@ -13,7 +13,7 @@ library(dplyr)
 library(plyr)
 library('RPostgreSQL')
 source("/home/rstudio/R/aws_rds_access.R")
-source("/home/rstudio/R/merge_files_function.R")
+source("merge_files_function.R")
 
 pg = dbDriver("PostgreSQL")
 con=dbConnect(pg, 
@@ -23,7 +23,7 @@ con=dbConnect(pg,
               password = password)
 
 #--------------PREHOSPITAL REPONSE GEMS/HEMS MERGING AND CLEANING---------------------------------#
-response_gems=read.csv("C:/Users/User/Desktop/DAPT Semester 4/VCU-HS/data/Gems/Prehospital facility-Response/response.csv",
+response_gems=read.csv("/home/rstudio/prehospital/response.csv",
                        header = TRUE,  
                        na.strings=c(""," ", "NA"), 
                        stringsAsFactors = FALSE)%>%
@@ -32,7 +32,7 @@ names(response_gems) <- sub("_e_.*", "", names(response_gems))
 response_gems=response_gems[,order(names(response_gems))]
 response_gems=response_gems[,-21]
 
-response_hems=read.csv("C:/Users/User/Desktop/DAPT Semester 4/VCU-HS/data/PreHospital facility-Response.csv",
+response_hems=read.csv("/home/rstudio/prehospital/hems/response.csv",
                        header = TRUE,  
                        na.strings=c(""," ", "NA"), 
                        stringsAsFactors = FALSE)%>%
@@ -50,7 +50,7 @@ ems_service=response[,c("id", "response_ems_agency_name", "response_type_of_serv
 
 #----------------------PREHOSPITAL DISPATCH GEMS AND HEMS MERGE ----------------------#
 rm(pre_dispatch_gems)
-dir="C:/Users/User/Desktop/DAPT Semester 4/VCU-HS/data/Gems/PreHospital dispatch-time-scene"
+dir="/home/rstudio/prehospital/dispatch"
 setwd(dir)
 
 file_list = list.files(dir)
@@ -61,7 +61,7 @@ pre_dispatch_gems=rename(pre_dispatch_gems, c("incident_id_it_record_001" = "id"
 pre_dispatch_gems=pre_dispatch_gems[,order(names(pre_dispatch_gems))]
 
 
-pre_dispatch_hems=read.csv("C:/Users/User/Desktop/DAPT Semester 4/VCU-HS/data/PreHospital dispatch-time-scene.csv",
+pre_dispatch_hems=read.csv("/home/rstudio/prehospital/hems/dispatch.csv",
                            header = TRUE,  
                             na.strings=c(""," ", "NA"), 
                             stringsAsFactors = FALSE)%>%
@@ -75,13 +75,13 @@ pre_dispatch = rbind(pre_dispatch_gems, pre_dispatch_hems)
 dispatch_ems=left_join(ems_service, pre_dispatch, by=c("id"))
 
 #----------------------ZIP CODE MERGE FILES ----------------------#
-zip_2017=read.csv("C:/Users/User/Desktop/DAPT Semester 4/VCU-HS/data/dAgency.09 & zipcode- 2017.csv",
+zip_2017=read.csv("/home/rstudio/prehospital/zipcode_2017.csv",
                            header = TRUE,  
                            na.strings=c(""," ", "NA"), 
                            stringsAsFactors = FALSE)%>%
   clean_names() 
 
-zip_2018=read.csv("C:/Users/User/Desktop/DAPT Semester 4/VCU-HS/data/dAgency.09 & zipcode- 2018.csv",
+zip_2018=read.csv("/home/rstudio/prehospital/zipcode_2018.csv",
                   header = TRUE,  
                   na.strings=c(""," ", "NA"), 
                   stringsAsFactors = FALSE)%>%
@@ -93,7 +93,7 @@ zip=rbind(zip_2017, zip_2018)
 dispatch_ems_zip=left_join(dispatch_ems, zip, by=c("id" = "incident_id_it_record_001"))
 
 #---------------------PREHOSPITAL DISPOSITION MERGE GEMS AND HEMS --------------------#
-disposition_gems=read.csv("C:/Users/User/Desktop/DAPT Semester 4/VCU-HS/data/Gems/prehosp airway-disposition/disposition.csv",
+disposition_gems=read.csv("/home/rstudio/prehospital/disposition.csv",
                        header = TRUE,  
                        na.strings=c(""," ", "NA"), 
                        stringsAsFactors = FALSE)%>%
@@ -102,7 +102,7 @@ names(disposition_gems) <- sub("_e_.*", "", names(disposition_gems))
 disposition_gems=disposition_gems[,order(names(disposition_gems))]
 disposition_gems=disposition_gems[,-23]
 
-disposition_hems=read.csv("C:/Users/User/Desktop/DAPT Semester 4/VCU-HS/data/PreHospital airway-disposition.csv",
+disposition_hems=read.csv("/home/rstudio/prehospital/hems/PreHospital airway-disposition.csv",
                        header = TRUE,  
                        na.strings=c(""," ", "NA"), 
                        stringsAsFactors = FALSE)%>%
