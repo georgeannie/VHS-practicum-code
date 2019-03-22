@@ -15,14 +15,15 @@ source("distance.R")
 pg = dbDriver("PostgreSQL")
 con=dbConnect(pg, 
               dbname = "vhs",
-              host=host,
-              user = user, 
-              password = password)
+              host="vhs.cz9sqac5flvw.us-east-2.rds.amazonaws.com",
+              user = "vcudapt2019", 
+              password = "vcudapt2019")
 
 #----------------------READ ALL ROWS FROM TRAUMA TABLE --------------#
 trauma_patient_ed=dbGetQuery(con, 'select * from trauma_patient_ed')
 trauma_patient_motor_safety=dbGetQuery(con, 'select * from trauma_patient_motor_safety')
 zipcodes=dbGetQuery(con, 'select * from zipcode_info')
+trauma_incident = dbGetQuery(con, 'select * from trauma_incident')
 
 
 
@@ -106,6 +107,18 @@ to_scene=to_scene%>%
 #PLACEHOLDER FOR TIME INTERVAL OF ARRIVAL AT HOSPITAL
 
 #IMPUTATION FOR TIME INTERVAL
+
+
+# create breaks to define times of day
+breaks <- hour(hm("00:00", "6:00", "12:00", "18:00", "23:59"))
+# labels for the breaks
+labels <- c("Night", "Morning", "Afternoon", "Evening")
+
+trauma_incident$ems_unit_notified_time_of_day<- cut(x=hour(trauma_incident$ems_unit_notified_time_tr9_10), breaks = breaks, labels = labels, include.lowest=TRUE)
+
+############## Hour Number ####################
+
+trauma$ems_notify_time_hour <- hour(trauma_incident$ems_unit_notified_time_tr9_10)
 
 #PLACEHOLDER FOR COMORBIDITY - REDUCE NUMBER OF FACTORS
 
