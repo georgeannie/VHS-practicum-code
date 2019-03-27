@@ -33,6 +33,10 @@ trauma_incident = dbGetQuery(con, 'select * from trauma_incident')
 
 #PLACEHOLDER FOR PREHOSPITAL GCS
 
+separate(`prehospital_gcs_eye`, into = c("Prehospital_GCS_EYE_SEP"), sep = "\\s+", remove = FALSE, convert = FALSE, extra = "drop")
+separate(`prehospital_gcs_verbal`, into = c("Prehospital_GCS_Verbal_SEP"), sep = "\\s+", remove = FALSE, convert = FALSE, extra = "drop")
+separate(`prehospital_gcs_motor`, into = c("Prehospital_GCS_Motor_SEP"), sep = "\\s+", remove = FALSE, convert = FALSE, extra = "drop")
+
 #IMPUTATION FO GCS
 
 #PLACEHOLDER FOR HOUR/TIME OF DAY OF UNIT DISPATCHED
