@@ -29,25 +29,20 @@ zip=read.csv("/home/rstudio/trauma/input/rural.csv" ,
 dbSendQuery(con, "drop table zipcode_info")
 dbWriteTable(con,c('zipcode_info'), value=zip, row.names=FALSE)
 
-#--------------------READ EMS AGENCY --- STILL WAITING --------------#
-ems_agency=read.csv("/home/rstudio/trauma/ems_agency.csv" , 
-                    header = TRUE,  na.strings=c(""," ", "NA"), stringsAsFactors = FALSE) %>%
+#--------------------READ EMS AGENCY -----------------------------------#
+ems_agency=read.csv("/home/rstudio/trauma/input/ems_agency.csv" , 
+                    header = TRUE,  na.strings=c(""," ", "NA"), 
+                    stringsAsFactors = FALSE) %>%
   clean_names() 
-
-zip_ems = left_join(zip, ems_agency, by='zip_code')
 
 dbSendQuery(con, "drop table zip_ems")
-dbWriteTable(con,c('zip_ems'), value=zip_ems, row.names=FALSE)
+dbWriteTable(con,c('zip_ems'), value=ems_agency, row.names=FALSE)
 
-
-#--------------------READ FACILTY ---STILL WAITING-------------------
-facility=read.csv("/home/rstudio/trauma/facility.csv" , 
-                    header = TRUE,  na.strings=c(""," ", "NA"), stringsAsFactors = FALSE) %>%
+#--------------------READ FACILTY -----------------------------------------
+facility=read.csv("/home/rstudio/trauma/input/facilities.csv" , 
+                  header = TRUE,  na.strings=c(""," ", "NA"), 
+                  stringsAsFactors = FALSE) %>%
   clean_names() 
 
-zip_fac = left_join(zip, facility, by='zip_code')
-
-
 dbSendQuery(con, "drop table zip_facility")
-dbWriteTable(con,c('zip_facility'), value=zip_fac, row.names=FALSE)
-
+dbWriteTable(con,c('zip_facility'), value=facility, row.names=FALSE)
