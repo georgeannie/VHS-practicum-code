@@ -10,8 +10,8 @@ library(stringr)
 library('RPostgreSQL')
 library(lazyeval)
 
-source("function_aws_rds_access.R")
-source("function_impute_zip_ems_facility.R")
+source("/home/rstudio/R/VHS_github/VHS-practicum-code/aws_rds_access.R")
+source("/home/rstudio/R/VHS_github/VHS-practicum-code/Imputation_cleaning/function_impute_zip_ems_facility.R")
 
 pg = dbDriver("PostgreSQL")
 con=dbConnect(pg, 
@@ -298,9 +298,15 @@ sum(is.na(trauma$ems_service_name_tr7_3_y))
 sum(is.na(trauma$injury_zip_tr5_6))
 
 trauma=rbind(trauma, null_trauma, remove_trauma)
+
+#Remove all interfacility transfer of Yes
+trauma=trauma[trauma$inter_facility_transfer_tr25_54 == 'No',]
+
+#Check the missing values in facility, ems service and zip code
 sum(is.na(trauma$facility_name_y))
 sum(is.na(trauma$ems_service_name_tr7_3_y))
 sum(is.na(trauma$injury_zip_tr5_6))
+
 
 library(RPostgreSQL)
 pg = dbDriver("PostgreSQL")
@@ -311,7 +317,7 @@ con=dbConnect(pg,
               password = password)
 
 dbSendQuery(con, "drop table clean_trauma")
-dbWriteTable(con,c('clean_trauma'), value=clean_trauma, row.names=FALSE)
+dbWriteTable(con,c('clean_trauma'), value=trauma, row.names=FALSE)
 
 dbDisconnect(con)
 detach("package:RPostgreSQL", unload=TRUE)
