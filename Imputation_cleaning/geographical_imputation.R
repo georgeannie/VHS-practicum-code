@@ -36,7 +36,7 @@ ems_service = sqldf('select b.ems_service_name_tr7_3_y
                     left join trauma_patient_ed b
                     on a.incident_id = b.incident_id')
 
-facility = sqldf('select b.facility_name_y
+facility = sqldf('select b.facility_name
                  from trauma_incident a
                  left join trauma_patient_ed  b
                  on a.incident_id = b.incident_id')
@@ -60,13 +60,13 @@ trauma = trauma %>%
 #---------------------------------------------------------------------------#
 null_trauma=trauma[ (is.na(trauma$injury_zip_tr5_6) &
                    (is.na(trauma$injury_county_tr5_9) | trauma$injury_county_tr5_9 == 'Not Applicable') &
-                   is.na(trauma$facility_name_y) &
+                   is.na(trauma$facility_name) &
                    is.na(trauma$ems_service_name_tr7_3_y)) &
                  trauma$inter_facility_transfer_tr25_54 == 'Yes',]
 
 trauma=trauma[ !(is.na(trauma$injury_zip_tr5_6) &
             (is.na(trauma$injury_county_tr5_9) | trauma$injury_county_tr5_9 == 'Not Applicable') &
-             is.na(trauma$facility_name_y) &
+             is.na(trauma$facility_name) &
               is.na(trauma$ems_service_name_tr7_3_y)) &
               trauma$inter_facility_transfer_tr25_54 == 'No',]
 
@@ -82,7 +82,7 @@ trauma=trauma[ !(is.na(trauma$injury_zip_tr5_6) &
 
 trauma=unique_entry(df=trauma, 
                     var1=injury_zip_tr5_6,
-                    distinct_var2 = facility_name_y, 
+                    distinct_var2 = facility_name, 
                     key_var =incident_id)
 sum(is.na(trauma$injury_zip_tr5_6))
 
@@ -122,7 +122,7 @@ sum(is.na(trauma$ems_service_name_tr7_3_y))
 #---------------------------------------------------------------------------#
 trauma=unique_entry(df=trauma, 
                     var1=ems_service_name_tr7_3_y,
-                    distinct_var2 = facility_name_y, 
+                    distinct_var2 = facility_name, 
                     key_var =incident_id)
 sum(is.na(trauma$ems_service_name_tr7_3_y))
 
@@ -131,7 +131,7 @@ sum(is.na(trauma$ems_service_name_tr7_3_y))
 #               Still 104  missing facility name missing                    #  
 #---------------------------------------------------------------------------#
 trauma=unique_entry(df=trauma, 
-                    var1=facility_name_y,
+                    var1=facility_name,
                     distinct_var2 = injury_zip_tr5_6, 
                     key_var =incident_id)
 sum(is.na(trauma$facility_name_y))
@@ -141,10 +141,10 @@ sum(is.na(trauma$facility_name_y))
 #               Still 66   missing facility name missing                    #  
 #---------------------------------------------------------------------------#
 trauma=unique_entry(df=trauma, 
-                    var1=facility_name_y,
+                    var1=facility_name,
                     distinct_var2 = ems_service_name_tr7_3_y, 
                     key_var =incident_id)
-sum(is.na(trauma$facility_name_y))
+sum(is.na(trauma$facility_name))
 
 #----------------------STEP IX - Imputation for zip code--------------------#
 # Find most common zip codes for each facility and impute injury zip code   #
@@ -152,7 +152,7 @@ sum(is.na(trauma$facility_name_y))
 #---------------------------------------------------------------------------#
 trauma=unique_entry(df=trauma, 
                     var1=injury_zip_tr5_6,
-                    distinct_var2 = facility_name_y, 
+                    distinct_var2 = facility_name, 
                     key_var =incident_id)
 sum(is.na(trauma$injury_zip_tr5_6))
 
@@ -192,7 +192,7 @@ sum(is.na(trauma$ems_service_name_tr7_3_y))
 #---------------------------------------------------------------------------#
 trauma=unique_entry(df=trauma, 
                     var1=ems_service_name_tr7_3_y,
-                    distinct_var2 = facility_name_y, 
+                    distinct_var2 = facility_name, 
                     key_var =incident_id)
 sum(is.na(trauma$ems_service_name_tr7_3_y))
 
@@ -211,10 +211,10 @@ sum(is.na(trauma$facility_name_y))
 #               Still 66   missing facility name missing                    #  
 #---------------------------------------------------------------------------#
 trauma=unique_entry(df=trauma, 
-                    var1=facility_name_y,
+                    var1=facility_name,
                     distinct_var2 = ems_service_name_tr7_3_y, 
                     key_var =incident_id)
-sum(is.na(trauma$facility_name_y))
+sum(is.na(trauma$facility_name))
 
 #-----------------STEP XVII - Imputation for ems service name -------------#
 # Find most common county name for each ems and impute ems service name    #
@@ -231,10 +231,10 @@ sum(is.na(trauma$ems_service_name_tr7_3_y))
 #               Still 2   missing facility name missing                     #  
 #---------------------------------------------------------------------------#
 trauma=unique_entry(df=trauma, 
-                    var1=facility_name_y,
+                    var1=facility_name,
                     distinct_var2 = injury_county_tr5_9, 
                     key_var =incident_id)
-sum(is.na(trauma$facility_name_y))
+sum(is.na(trauma$facility_name))
 
 
 #-----------------Analysis using trauma dataset-----------------------------#
@@ -288,12 +288,12 @@ trauma$injury_zip_tr5_6[trauma$incident_id == "2881927"] = '20110'
 trauma$ems_service_name_tr7_3_y[trauma$incident_id == "2881927"] = 'CITY OF MANASSAS FIRE & RESCUE'
 
 trauma$injury_zip_tr5_6[trauma$incident_id == "2850567"] = '23113'
-trauma$facility_name_y[trauma$incident_id == "2850567"] = 'VCU Health Systems'
+trauma$facility_name[trauma$incident_id == "2850567"] = 'VCU Health Systems'
 
 remove_trauma=trauma[trauma$incident_id == "2826937",] 
 trauma=trauma[!trauma$incident_id == "2826937",] 
 
-sum(is.na(trauma$facility_name_y))
+sum(is.na(trauma$facility_name))
 sum(is.na(trauma$ems_service_name_tr7_3_y))
 sum(is.na(trauma$injury_zip_tr5_6))
 

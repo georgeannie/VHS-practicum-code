@@ -6,7 +6,7 @@ library(janitor)
 library(tidyr)
 library(dplyr)
 library(plyr)
-source("merge_files_function.R")
+source("/home/rstudio/R/VHS_github/VHS-practicum-code/merge_files_function.R")
 
 #----------------------TRAUMA PART 1 ----------------------#
 rm(trauma_part1_gems)
@@ -67,30 +67,32 @@ trauma_gems_clean_zip=trauma_gems_clean_zip[,order(names(trauma_gems_clean_zip))
 trauma_hems = read.csv("/home/rstudio/trauma/hems/Truama_Registry_all_data2.csv" , 
                        header = TRUE,  na.strings=c(""," ", "NA"), stringsAsFactors = FALSE)%>%
   clean_names() 
-trauma_hems=rename(trauma_hems, "ems_service_name_tr7_3.y" = "ems_service_name_tr7_3")
+#trauma_hems=rename(trauma_hems, "ems_service_name_tr7_3.y" = "ems_service_name_tr7_3")
 names(trauma_hems) <- sub("_e_.*", "", names(trauma_hems))
 
 #--------------REORDER COLUMN NAMES ALPHABETICALLY -----#
 #-------------(SHOULD BE UPDATED WHEN THE NEW DATA IS RECEIVED FOR HEMS) -----#
-trauma_hems = read.csv("/home/rstudio/trauma/input/Hems GCS-facility.csv" , 
+trauma_hems_gcs = read.csv("/home/rstudio/trauma/input/Hems_GCS-facility.csv" , 
                     header = TRUE,  na.strings=c(""," ", "NA"), 
                     stringsAsFactors = FALSE)%>%
   clean_names()  %>%
   right_join(trauma_hems, by='incident_id') %>%
   distinct()
 
-trauma_hems=trauma_hems[,order(names(trauma_hems))]
+trauma_hems=trauma_hems_gcs[,order(names(trauma_hems_gcs))]
 
 #-------------------CLEAN/REORDER DATA TO MATCH GEMS AND ARRANGE ALPHABETICALY -------#
+facility_hems=trauma_hems[, c('incident_id', 'facility_name')]
 trauma_hems_clean=trauma_hems[,!names(trauma_hems) %in% c("hospital_discharge_date_time",
                                                           "hospital_discharge_orders_written_time_tr25_94",
                                                           "icd_9_procedure_date_tr22_5",
                                                           "icd_9_procedure_time_tr22_31",
                                                           "patient_state_tr1_23",
-                                                          "ems_service_name_tr7_3.x")]
+                                                          "ems_service_name_tr7_3.x",
+                                                          "facility_name"
+                                                          )]
 
 trauma_hems_clean=trauma_hems_clean[,order(names(trauma_hems_clean))]
-
 
 #-----------------COMBINE HEMS AND GEMS ----------------------#
 trauma = rbind(trauma_hems_clean, 
@@ -106,8 +108,21 @@ icd10 = read.csv("/home/rstudio/trauma/input/icd10.csv" ,
 trauma_icd10=left_join(trauma, icd10, by='incident_id') %>%
   distinct()
 
+#-------------MERGE WITH HEMS FACILTY -------------------#
+trauma_facility=left_join(trauma_icd10, facility_hems, by='incident_id') %>%
+  distinct() %>%
+  clean_names()
 
-#-------------MERGE WITH HEMS FACILTY, EMS, GCS -------------------#
+trauma_facility$facility_name_x[is.na(trauma_facility$facility_name_x)] = 
+  trauma_facility$facility_name_y[is.na(trauma_facility$facility_name_x)]
+
+#---------------------------------------------------------------------------#
+#   REMOVE THE NEW COLUMN CREATED AFTER MERGE                               #
+#---------------------------------------------------------------------------#
+
+trauma_facility=trauma_facility[,!names(trauma_facility) %in% c("facility_name_y")]
+names(trauma_facility)[names(trauma_facility) == 'facility_name_x'] = 
+   "facility_name"  
 
 setwd("/home/rstudio/trauma/output")
-write.csv(new_file, 'trauma.csv')
+write.csv(trauma_facility, 'trauma.csv')

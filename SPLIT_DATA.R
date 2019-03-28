@@ -38,10 +38,10 @@ trauma_ems_service=trauma[, c('incident_id', 'ems_service_name_tr7_3_y') ] %>%
   group_by(incident_id, ems_service_name_tr7_3_y)
 
 #------------------------GET DISTINCT FACILITY NAME FOR EACH INCIDENT ----------------------------------#
-trauma_facility_name=trauma[, c('incident_id', 'facility_name_y')]  %>%
+trauma_facility_name=trauma[, c('incident_id', 'facility_name')]  %>%
   distinct(.keep_all = TRUE) %>%
-  filter(!is.na(facility_name_y)) %>%
-  group_by(incident_id, facility_name_y)
+  filter(!is.na(facility_name)) %>%
+  group_by(incident_id, facility_name)
 
 #-----------------SEPARATE VEHICLE ACCIDENT TO IDENTIFY VEHICLE ACCIDENT-------------------------------#
 trauma_patient_motor_safety = trauma[, c("incident_id", "airbag_deployment_tr29_32", 
@@ -128,6 +128,7 @@ trauma_patient_ed=trauma %>%
           ed_acute_care_discharge_time_tr17_26, 
           ed_acute_care_disposition_tr17_27, 
           ed_death_tr27_14, 
+          ems_transport_mode_from_scene_tr8_10,
           financial_primary_method_of_payment_tr2_5, 
           hospital_discharge_date_tr25_34, 
           hospital_discharge_disposition_tr25_27, 
@@ -187,8 +188,8 @@ dbWriteTable(con,c('trauma_incident'), value=trauma_incident, row.names=FALSE)
 
 #-----------------PREHOSPITAL --------------------------------#
 trauma_prehospital_unique=trauma%>%
-  select(incident_id, prehospital_gcs_eye_y, prehospital_gcs_motor_y,
-         prehospital_gcs_verbal_y, prehospital_gcs_total_manual_tr18_64, 
+  select(incident_id, prehospital_gcs_eye, prehospital_gcs_motor,
+         prehospital_gcs_verbal, prehospital_gcs_total_manual_tr18_64, 
          prehospital_pulse_oximetry_tr18_82, 
          prehospital_pulse_rate_tr18_69, 
          prehospital_respiratory_rate_tr18_70, 
@@ -197,8 +198,8 @@ trauma_prehospital_unique=trauma%>%
 
 ###### GET DUPLICATES ############
 trauma_prehospital_dup=trauma%>%
-  select(incident_id, prehospital_gcs_eye_y, prehospital_gcs_motor_y,
-         prehospital_gcs_verbal_y,
+  select(incident_id, prehospital_gcs_eye, prehospital_gcs_motor,
+         prehospital_gcs_verbal,
          prehospital_gcs_total_manual_tr18_64, 
          prehospital_pulse_oximetry_tr18_82, 
          prehospital_pulse_rate_tr18_69, 
@@ -226,20 +227,20 @@ trauma_prehospital_summary=trauma_prehospital_dup %>%
 
 ###GET UNIQUE VALUE OF GCS EYE, MOTOR, VERBAL AND JOIN WITH SUMMARY ########33
 trauma_prehospital_dup_1 = trauma_prehospital_dup %>% 
-  select(incident_id, prehospital_gcs_eye_y, prehospital_gcs_motor_y,
-           prehospital_gcs_verbal_y) %>%
+  select(incident_id, prehospital_gcs_eye, prehospital_gcs_motor,
+           prehospital_gcs_verbal) %>%
   distinct(.keep_all = TRUE) %>%
-  filter(!is.na(prehospital_gcs_eye_y) & !is.na(prehospital_gcs_eye_y) & 
-           !is.na(prehospital_gcs_eye_y)) %>%
-  filter(!prehospital_gcs_eye_y=='Not Applicable' & 
-         !prehospital_gcs_motor_y == 'Not Applicable' & 
-         !prehospital_gcs_verbal_y == 'Not Applicable') %>%
-  filter(!prehospital_gcs_eye_y=='Not Known' & 
-           !prehospital_gcs_motor_y == 'Not Known' & 
-           !prehospital_gcs_verbal_y == 'Not Known') %>%
-  filter(!prehospital_gcs_eye_y=='Not Known/Not Recorded' & 
-           !prehospital_gcs_motor_y == 'Not Known/Not Recorded' & 
-           !prehospital_gcs_verbal_y == 'Not Known/Not Recorded') %>%
+  filter(!is.na(prehospital_gcs_eye) & !is.na(prehospital_gcs_eye) & 
+           !is.na(prehospital_gcs_eye)) %>%
+  filter(!prehospital_gcs_eye=='Not Applicable' & 
+         !prehospital_gcs_motor == 'Not Applicable' & 
+         !prehospital_gcs_verbal == 'Not Applicable') %>%
+  filter(!prehospital_gcs_eye=='Not Known' & 
+           !prehospital_gcs_motor == 'Not Known' & 
+           !prehospital_gcs_verbal == 'Not Known') %>%
+  filter(!prehospital_gcs_eye=='Not Known/Not Recorded' & 
+           !prehospital_gcs_motor == 'Not Known/Not Recorded' & 
+           !prehospital_gcs_verbal == 'Not Known/Not Recorded') %>%
   right_join(trauma_prehospital_summary, by="incident_id")
 
 ############REMOVE ALL INCIDENT IDS FROM UNIQUE DF TO COMBINE WITH DUPLICATE DF #######            
@@ -261,6 +262,6 @@ initial_assessment= trauma %>%
   group_by(incident_id) 
   
 dbSendQuery(con, "drop table initial_respiratory")
-dbWriteTable(con,c('initial_respiratory'), value=initial_assessment, row.names=FALSE)
+dbWriteTable(con,c('initial_respssiratory'), value=initial_assessment, row.names=FALSE)
 
 
