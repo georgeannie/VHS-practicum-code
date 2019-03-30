@@ -299,17 +299,26 @@ sum(is.na(trauma$injury_zip_tr5_6))
 
 trauma=rbind(trauma, null_trauma, remove_trauma)
 
-#Remove all interfacility transfer of Yes
+#---------------------------------------------------------------------------------------------------#
+#REMOVE ALL INTERFACILITY TRANSFER
+#---------------------------------------------------------------------------------------------------#
 trauma=trauma[trauma$inter_facility_transfer_tr25_54 == 'No',]
 
-#Remove all gender that is na and those that have value 'Not Applicable'
+#---------------------------------------------------------------------------------------------------#
+#REMOVE AL MISSING GENDER AND THOSE WITH VALUE 'NOT APPLICABLE'
+#---------------------------------------------------------------------------------------------------#
 trauma=trauma[!(trauma$patient_gender_tr1_15 == 'Not Applicable' |
-                is.na(trauma$patient_gender_tr1_15)),]
+                is.na(trauma$patient_gender_tr1_15) |
+                trauma$patient_gender_tr1_15 == '-Select-'),]
 
-#Remove all age that is na 
+#---------------------------------------------------------------------------------------------------#
+#REMOVE ALL MISSING AGE
+#---------------------------------------------------------------------------------------------------#
 trauma=trauma[!is.na(trauma$patient_age_tr1_12), ]
 
+#---------------------------------------------------------------------------------------------------#
 #Check the missing values in facility, ems service and zip code
+#---------------------------------------------------------------------------------------------------#
 sum(is.na(trauma$facility_name_y))
 sum(is.na(trauma$ems_service_name_tr7_3_y))
 sum(is.na(trauma$injury_zip_tr5_6))
