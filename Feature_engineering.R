@@ -29,6 +29,23 @@ trauma_incident = dbGetQuery(con, 'select * from trauma_incident')
 
 #PLACEHOLDER FOR PREHOSPITAL PARAMETERS
 
+#Indication of systolic blood pressure in range based off of age.  1 meaning within range and 0 out of range.  
+conversion$sbpinrange<-ifelse(conversion$Year<=1, 
+                     (ifelse(conversion$prehospital_sbp_tr18_67>71 & conversion$prehospital_sbp_tr18_67<104,1,0)),
+              ifelse(conversion$Year>1 & conversion$Year<3,
+                     (ifelse(conversion$prehospital_sbp_tr18_67>85 & conversion$prehospital_sbp_tr18_67<107,1,0)),
+              ifelse(conversion$Year>2 & conversion$Year<6,
+                     (ifelse(conversion$prehospital_sbp_tr18_67>88 & conversion$prehospital_sbp_tr18_67<113,1,0)),
+              ifelse(conversion$Year>6 & conversion$Year<10,       
+                     (ifelse(conversion$prehospital_sbp_tr18_67>96 & conversion$prehospital_sbp_tr18_67<116,1,0)),
+              ifelse(conversion$Year>10 & conversion$Year<12, 
+                     (ifelse(conversion$prehospital_sbp_tr18_67>101 & conversion$prehospital_sbp_tr18_67<121,1,0)),
+              ifelse(conversion$Year>12 & conversion$Year<15, 
+                     (ifelse(conversion$prehospital_sbp_tr18_67>109 & conversion$prehospital_sbp_tr18_67<132,1,0)),
+              ifelse(conversion$Year>15,
+                     (ifelse(conversion$prehospital_sbp_tr18_67>89 & conversion$prehospital_sbp_tr18_67<121,1,0))
+              )))))))            
+
 #IMPUTATION FOR MISSING PREHOSPITAL PARAMETRERS (TRAUMA)
 
 #PLACEHOLDER FOR PREHOSPITAL GCS
