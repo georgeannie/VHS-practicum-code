@@ -46,6 +46,34 @@ conversion$sbpinrange<-ifelse(conversion$Year<=1,
                      (ifelse(conversion$prehospital_sbp_tr18_67>89 & conversion$prehospital_sbp_tr18_67<121,1,0))
               )))))))            
 
+#Indication of respiratory rate within range based off of age.  1 meaning within range and 0 out of range.
+conversion$respinrange<-ifelse(conversion$Year<=1, 
+                              (ifelse(conversion$prehospital_respiratory_rate_tr18_70>29 & conversion$prehospital_respiratory_rate_tr18_70<54,1,0)),
+                      ifelse(conversion$Year>1 & conversion$Year<3,
+                              (ifelse(conversion$prehospital_respiratory_rate_tr18_70>21 & conversion$prehospital_respiratory_rate_tr18_70<37,1,0)),
+                      ifelse(conversion$Year>=3 & conversion$Year<6,
+                              (ifelse(conversion$prehospital_respiratory_rate_tr18_70>20 & conversion$prehospital_respiratory_rate_tr18_70<28,1,0)),
+                      ifelse(conversion$Year>=6 & conversion$Year<12,       
+                              (ifelse(conversion$prehospital_respiratory_rate_tr18_70>17 & conversion$prehospital_respiratory_rate_tr18_70<25,1,0)),
+                      ifelse(conversion$Year>=12 & conversion$Year<16, 
+                              (ifelse(conversion$prehospital_respiratory_rate_tr18_70>11 & conversion$prehospital_respiratory_rate_tr18_70<21,1,0)),
+                      ifelse(conversion$Year>=16, 
+                              (ifelse(conversion$prehospital_respiratory_rate_tr18_70>11 & conversion$prehospital_respiratory_rate_tr18_70<19,1,0))
+                      )))))) 
+
+#Indication of pulse within range based off of age.  1 meaning within range and 0 out of range.
+conversion$pulseinrange<-ifelse(conversion$Year<=1, 
+                               (ifelse(conversion$prehospital_pulse_rate_tr18_69>99 & conversion$prehospital_pulse_rate_tr18_69<191,1,0)),
+                        ifelse(conversion$Year>1 & conversion$Year<3,
+                              (ifelse(conversion$prehospital_pulse_rate_tr18_69>97 & conversion$prehospital_pulse_rate_tr18_69<141,1,0)),
+                        ifelse(conversion$Year>=3 & conversion$Year<6,
+                              (ifelse(conversion$prehospital_pulse_rate_tr18_69>79 & conversion$prehospital_pulse_rate_tr18_69<121,1,0)),
+                        ifelse(conversion$Year>=6 & conversion$Year<12,       
+                              (ifelse(conversion$prehospital_pulse_rate_tr18_69>74 & conversion$prehospital_pulse_rate_tr18_69<119,1,0)),
+                        ifelse(conversion$Year>=12, 
+                              (ifelse(conversion$prehospital_pulse_rate_tr18_69>59 & conversion$prehospital_pulse_rate_tr18_69<101,1,0))
+                        )))))  
+
 #IMPUTATION FOR MISSING PREHOSPITAL PARAMETRERS (TRAUMA)
 
 #PLACEHOLDER FOR PREHOSPITAL GCS
