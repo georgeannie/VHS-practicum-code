@@ -11,7 +11,6 @@ library(purr)
 library('RPostgreSQL')
 
 source("/home/rstudio/R/VHS_github/VHS-practicum-code/aws_rds_access.R")
-source("function_aws_rds_access.R")
 
 pg = dbDriver("PostgreSQL")
 con=dbConnect(pg, 
