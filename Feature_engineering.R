@@ -74,6 +74,9 @@ conversion$pulseinrange<-ifelse(conversion$Year<=1,
                               (ifelse(conversion$prehospital_pulse_rate_tr18_69>59 & conversion$prehospital_pulse_rate_tr18_69<101,1,0))
                         )))))  
 
+#Indication of oximetry within range based off of age.  1 meaning within range and 0 out of range.
+conversion$oximetry<- ifelse(conversion$prehospital_pulse_oximetry_tr18_82>94 & conversion$prehospital_pulse_oximetry_tr18_82<101,1,0)
+
 #IMPUTATION FOR MISSING PREHOSPITAL PARAMETRERS (TRAUMA)
 
 #PLACEHOLDER FOR PREHOSPITAL GCS
