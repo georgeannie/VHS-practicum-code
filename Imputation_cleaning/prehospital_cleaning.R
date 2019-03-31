@@ -74,6 +74,15 @@ trauma_prehospital1 = trauma_prehospital1 %>%
                                                          (prehospital_gcs_motor_num + prehospital_gcs_eye_num +  prehospital_gcs_verbal_num)))
 
 #---------------------------------------------------------------------------#
+#  IF TOTAL SCORE IS ZERO, SET IT AS THE HIGHEST OF 15                      #
+#---------------------------------------------------------------------------#
+
+trauma_prehospital1 = trauma_prehospital1 %>%
+  mutate(prehospital_gcs_total_manual_tr18_64 = case_when( 
+    prehospital_gcs_total_manual_tr18_64 == 0 ~ 15,
+    TRUE ~ prehospital_gcs_total_manual_tr18_64)
+  )
+#---------------------------------------------------------------------------#
 #  DISTRIBUTE THE HIGHEST SCORE OF 15 AS 5 IN EACH OF EYE, VERBAL AND MOTOR #
 #  DISTRIBUTE THE LOWEST SCORE OF 3 AS 1 IN EACH OF EYE, VERBAL AND MOTOR   #
 #---------------------------------------------------------------------------#
