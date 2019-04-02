@@ -14,7 +14,6 @@ library('RPostgreSQL')
 
 source("distance_function.R")
 source("/home/rstudio/R/VHS_github/VHS-practicum-code/aws_rds_access.R")
-source("function_aws_rds_access.R")
 
 pg = dbDriver("PostgreSQL")
 con=dbConnect(pg, 
@@ -410,24 +409,24 @@ zip_facility$facility_name = toupper(zip_facility$facility_name)
 clean_trauma1$facility_name = toupper(clean_trauma1$facility_name)
 
 clean_trauma1 = clean_trauma1 %>% 
-  left_join(zip_facility, by = 'facility_name', copy = FALSE) %>%
-  rename(c("zip_code"="facility_zip"))
+  left_join(zip_facility, by = 'facility_name') %>%
+  plyr::rename(c("zip_code"="facility_zip"))
 
 #JOIN NEW ZIPCODE DF TO CLEAN_TRAUMA
 temp = clean_trauma1 %>% 
   left_join(zip_lat, by = c("injury_zip_tr5_6" = "zip"), copy = FALSE) %>%
-  rename(c("latitude"="injury_lat", "longitude"="injury_long"))
+  plyr::rename(c("latitude"="injury_lat", "longitude"="injury_long"))
 
 temp = temp %>% 
   left_join(zip_lat, by = c("facility_zip" = "zip"), copy = FALSE) %>%
-  rename(c("latitude"="facility_lat", "longitude" = "facility_long"))
+  plyr::rename(c("latitude"="facility_lat", "longitude" = "facility_long"))
 
 #CALC DISTANCE BETWEEN INJURY AND FACILITY
 temp = temp %>% 
   mutate(
     distance = get_geo_distance(injury_long, injury_lat, facility_long, facility_lat),
-    drive_dist_to_facility = (distance + 1)*1.30,
-    ground_time_to_facility = drive_dist_to_facility/40 * 60
+    drive_dist_to_facility = round((distance + 1)*1.30, 2),
+    ground_time_to_facility = round(drive_dist_to_facility/40 * 60, 0)
   ) %>%
   select(incident_id, drive_dist_to_facility, ground_time_to_facility )
 
@@ -443,24 +442,25 @@ zip_ems$ems_service_name_tr7_3= toupper(zip_ems$ems_service_name_tr7_3)
 clean_trauma1$ems_service_name_tr7_3_y = toupper(clean_trauma1$ems_service_name_tr7_3_y)
 
 temp = clean_trauma1 %>% 
-  left_join(zip_ems, by = c("ems_service_name_tr7_3_y" =  "ems_service_name_tr7_3"), copy = FALSE) %>%
-  rename(c("zip"="ems_zip"))
+  left_join(zip_ems, by = c("ems_service_name_tr7_3_y" =  "ems_service_name_tr7_3"), 
+            copy = FALSE) %>%
+  plyr::rename(c("zip"="ems_zip"))
 
 #JOIN NEW ZIPCODE DF TO CLEAN_TRAUMA
 temp = temp %>% 
   left_join(zip_lat, by = c("injury_zip_tr5_6" = "zip"), copy = FALSE) %>%
-  rename(c("latitude" = "injury_lat", "longitude" = "injury_long" ))
+  plyr::rename(c("latitude" = "injury_lat", "longitude" = "injury_long" ))
 
 temp = temp %>% 
   left_join(zip_lat, by = c("ems_zip" = "zip"), copy = FALSE) %>%
-  rename(c("latitude"="ems_lat",  "longitude" = "ems_long"))
+  plyr::rename(c("latitude"="ems_lat",  "longitude" = "ems_long"))
 
 #REARRANGE INCIDENT ID AND DISTANCE BY THE SHORTEST DISTANCE FOR EACH INCIDENT
 temp = temp %>%
   mutate(
     distance = get_geo_distance(injury_long, injury_lat, ems_long, ems_lat),
-    drive_dist_from_ems = (distance + 1)*1.3, 
-    ground_time_from_ems = drive_dist_from_ems/40 * 60
+    drive_dist_from_ems = round((distance + 1)*1.3, 2), 
+    ground_time_from_ems = round(drive_dist_from_ems/40 * 60, 0)
   ) %>%
   select(incident_id, ems_zip, drive_dist_from_ems, ground_time_from_ems) %>%
   arrange(incident_id, drive_dist_from_ems)
@@ -506,3 +506,15 @@ clean_trauma1 = clean_trauma1 %>% mutate(Outcome = case_when(
 
 clean_trauma1=clean_trauma1[,order(names(clean_trauma1))]
 
+library('RPostgreSQL')
+source("/home/rstudio/R/VHS_github/VHS-practicum-code/aws_rds_access.R")
+
+pg = dbDriver("PostgreSQL")
+con=dbConnect(pg, 
+              dbname = "vhs",
+              host=host,
+              user = user, 
+              password = password)
+
+dbSendQuery(con, "drop table feature_set_trauma")
+dbWriteTable(con,c('feature_set_trauma'), value=clean_trauma1, row.names=FALSE)

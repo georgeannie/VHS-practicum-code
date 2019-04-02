@@ -128,7 +128,6 @@ trauma_patient_ed=trauma %>%
           ed_acute_care_discharge_time_tr17_26, 
           ed_acute_care_disposition_tr17_27, 
           ed_death_tr27_14, 
-          ems_transport_mode_from_scene_tr8_10,
           financial_primary_method_of_payment_tr2_5, 
           hospital_discharge_date_tr25_34, 
           hospital_discharge_disposition_tr25_27, 

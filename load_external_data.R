@@ -46,3 +46,4 @@ facility=read.csv("/home/rstudio/trauma/input/facilities.csv" ,
 
 dbSendQuery(con, "drop table zip_facility")
 dbWriteTable(con,c('zip_facility'), value=facility, row.names=FALSE)
+
