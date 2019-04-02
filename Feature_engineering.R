@@ -6,11 +6,13 @@ library(geosphere)
 library(dplyr)
 library(tidyr)
 library(rlist)
-library(purr)
+library(purrr)
 library(lubridate)
+library(zipcode)
+library(stringr)
 library('RPostgreSQL')
 
-source("distance.R")
+source("distance_function.R")
 source("/home/rstudio/R/VHS_github/VHS-practicum-code/aws_rds_access.R")
 source("function_aws_rds_access.R")
 
@@ -24,9 +26,11 @@ con=dbConnect(pg,
 #----------------------READ ALL ROWS FROM CLEAN_TRAUMA TABLE --------------#
 clean_trauma=dbGetQuery(con, 'select * from clean_trauma')
 trauma_patient_motor_safety=dbGetQuery(con, 'select * from trauma_patient_motor_safety')
-zipcodes=dbGetQuery(con, 'select * from zipcode_info')
+zipcode_info=dbGetQuery(con, 'select * from zipcode_info')
 trauma_prehospital=dbGetQuery(con, 'select * from trauma_prehospital')
 trauma_patient_alcohol_drug = dbGetQuery(con, 'select * from trauma_patient_alcohol_drug')
+zip_facility=dbGetQuery(con, 'select * from zip_facility')
+zip_ems=dbGetQuery(con, 'select * from zip_ems')
 
 #---------------DISCONNECT POSTGRES ------#
 dbDisconnect(con)
@@ -42,14 +46,14 @@ library(sqldf)
 clean_trauma1$patient_age_units_tr1_14[is.na(clean_trauma1$patient_age_units_tr1_14)] = 'Years'
 
 #--------------------------------------------------------------------------------------#
-#CONVERT AGE UNITS OF MONTHS AND DAYS TO YEARS 
+#CONVERT AGE UNITS OF MONTHS AND DAYS TO YEARS IN 0 AND 1
 #--------------------------------------------------------------------------------------#
 clean_trauma1$patient_age_tr1_12 = as.numeric(clean_trauma1$patient_age_tr1_12)
 clean_trauma1=sqldf('select *,
                  CASE
                  WHEN patient_age_units_tr1_14 = "Days" THEN 0
-                 WHEN (patient_age_units_tr1_14 = "Months" and patient_age_tr1_12 <= 12) THEN 0
-                 WHEN (patient_age_units_tr1_14 = "Months" and patient_age_tr1_12 > 12) THEN 1  
+                 WHEN (patient_age_units_tr1_14 = "Months" and patient_age_tr1_12 < 12) THEN 0
+                 WHEN (patient_age_units_tr1_14 = "Months" and patient_age_tr1_12 >= 12) THEN 1  
                  WHEN patient_age_units_tr1_14= "Years" THEN patient_age_tr1_12
                  END AS years
                  from clean_trauma1')
@@ -69,6 +73,17 @@ clean_trauma1=sqldf('select *,
           FROM clean_trauma1') 
 
 
+#--------------------------------------------------------------------------------------#
+#CONVERT AGE UNITS OF MONTHS AND DAYS TO YEARS IN DECIMAL
+#--------------------------------------------------------------------------------------#
+clean_trauma1=clean_trauma1 %>%
+  mutate(decimal_years= case_when(
+      patient_age_units_tr1_14== "Years" ~ patient_age_tr1_12,
+      patient_age_units_tr1_14 == "Days" ~ round(patient_age_tr1_12 / 365 , 2),
+      patient_age_units_tr1_14 == "Months" ~ round(patient_age_tr1_12 / 12, 2)
+      )
+    )
+
 #---------------------------------------------------------------------------#
 #       FLAG IF VEHICLE ACCIDENT. SET 'Y' IT IF BOTH OR ONE OF THE  FIELDS  #
 #       HAVE VALUE. SET ALL MISSING VALUES AS NO                            #
@@ -76,7 +91,7 @@ clean_trauma1=sqldf('select *,
 
 vehacct = trauma_patient_motor_safety %>%
   mutate(vehicle_accident = case_when((is.na(airbag_deployment_tr29_32) |
-                                         airbag_deployment_tr29_32 == 'Not Applicable'  |
+                                         airbag_deployment_tr29_32 == 'Not Applicable'|
                                          airbag_deployment_tr29_32 ==  "Airbag Not Deployed") &
                                         (is.na(safety_device_used_tr29_24) |
                                            safety_device_used_tr29_24 == 'None') ~ 'No',
@@ -382,62 +397,89 @@ clean_trauma1 = clean_trauma1 %>%
   )
 
 
+#-------------------------------------------------------------------#
+#FIND DISTANCE FROM SCENE TO HOSPITAL
+#-------------------------------------------------------------------#
+#LOAD ZIPCODE DF
+data("zipcode")
+zip_lat = zipcode
 
-#PLACEHOLDER FOR DISTANCE FROM EMS AND TO HOSPITAL
-injury_zip=data.frame("incident_id" = trauma_patient_ed$agency_number_d_agency_02,
-                      "zip_code"=trauma_patient_ed$incident_agency_location_postal_code_d_location_09)
+zip_facility$zip_code = as.character(zip_facility$zip_code)
+zip_facility$facility_name = toupper(zip_facility$facility_name)
 
-lat_lang_injury=sqldf('select a.latitude as injury_lat, a.longitude as injury_long, 
-                       a.zip_code, b.incident_id
-                  from injury_zip b
-                  left join zipcodes a
-                  on a.zip_code = b.zip_code')
+clean_trauma1$facility_name = toupper(clean_trauma1$facility_name)
 
-lat_lang_hosp=sqldf('select a.latitude as hosp_lat, a.longitude as hosp_long, 
-                      a.zip_code, b.incident_id
-                  from injury_zip b
-                  left join facility_zip c
-                  on b.facility_name = c.facility_name
-                       join zipcodes a 
-                  on b.zipcode = a.zip_code')
+clean_trauma1 = clean_trauma1 %>% 
+  left_join(zip_facility, by = 'facility_name', copy = FALSE) %>%
+  rename(c("zip_code"="facility_zip"))
 
-lat_lang_ems=sqldf('select a.latitude as ems_lat, a.longitude as ems_long, 
-                      a.zip_code, b.incident_id
-                  from injury_zip b
-                  left join ems_zip c
-                  on b.ems_name = c.ems_service_name
-                       join zipcodes a 
-                  on b.zipcode = a.zip_code')
+#JOIN NEW ZIPCODE DF TO CLEAN_TRAUMA
+temp = clean_trauma1 %>% 
+  left_join(zip_lat, by = c("injury_zip_tr5_6" = "zip"), copy = FALSE) %>%
+  rename(c("latitude"="injury_lat", "longitude"="injury_long"))
 
-geo_lat_lang=left_join(lat_lang_injury, lat_lang_hosp, by="incident_id")
-geo_lat_lang=left_join(geo_lat_lang, lat_lang_ems, by="incident_id")
+temp = temp %>% 
+  left_join(zip_lat, by = c("facility_zip" = "zip"), copy = FALSE) %>%
+  rename(c("latitude"="facility_lat", "longitude" = "facility_long"))
 
-trauma_patient_ed$distance_to_hospital=get_geo_distance(geo_lat_lang$injury_long, 
-                                                      geo_lat_lang$injury_lat, 
-                                                      geo_lat_lang$hosp_long, 
-                                                      geo_lat_lang$hosp_lat) 
+#CALC DISTANCE BETWEEN INJURY AND FACILITY
+temp = temp %>% 
+  mutate(
+    distance = get_geo_distance(injury_long, injury_lat, facility_long, facility_lat),
+    drive_dist_to_facility = (distance + 1)*1.30,
+    ground_time_to_facility = drive_dist_to_facility/40 * 60
+  ) %>%
+  select(incident_id, drive_dist_to_facility, ground_time_to_facility )
 
-trauma_patient_ed$distance_to_ems=get_geo_distance(geo_lat_lang$injury_long, 
-                                                        geo_lat_lang$injury_lat, 
-                                                        geo_lat_lang$ems_long, 
-                                                        geo_lat_lang$ems_lat) 
+clean_trauma1 = clean_trauma1 %>%
+  left_join(temp, by=c("incident_id"))
 
+#-------------------------------------------------------------------#
+#FIND DISTANCE FROM EMS TO SCENE
+#-------------------------------------------------------------------#
+zip_ems$zip = as.character(zip_ems$zip)
+zip_ems$ems_service_name_tr7_3= toupper(zip_ems$ems_service_name_tr7_3)
 
-#PLACEHOLDER FOR TIME INTERVAL OF ARRIVAL AT SCENEs
-table_prehospital = dispatch_zip_ems_fac[!is.na(dispatch_zip_ems_fac$scene_incident_postal_code_e_scene_19), ]
+clean_trauma1$ems_service_name_tr7_3_y = toupper(clean_trauma1$ems_service_name_tr7_3_y)
 
-table_trauma = trauma_patient_ed
-to_scene = sqldf('select a.ems_service_name_tr7_3, a.injury_zip_tr5_6, 
-                 b.incident_unit_arrived_on_scene_date_time, incident_unit_notified_by_dispatch_date_time
-                 from table_trauma a
-                 left join table_prehospital b
-                  on a.injury_zip_tr5_6 = b.scene_incident_postal_code_e_scene_19
-                  and a.ems_service_name_tr7_3 = b.response_ems_agency_name
-                  and (a.injury_zip_tr5_6 > " "
-                   AND a.ems_service_name_tr7_3 > " ")')
-to_scene=to_scene%>%
-    distinct(.keep_all = TRUE) 
-  
+temp = clean_trauma1 %>% 
+  left_join(zip_ems, by = c("ems_service_name_tr7_3_y" =  "ems_service_name_tr7_3"), copy = FALSE) %>%
+  rename(c("zip"="ems_zip"))
+
+#JOIN NEW ZIPCODE DF TO CLEAN_TRAUMA
+temp = temp %>% 
+  left_join(zip_lat, by = c("injury_zip_tr5_6" = "zip"), copy = FALSE) %>%
+  rename(c("latitude" = "injury_lat", "longitude" = "injury_long" ))
+
+temp = temp %>% 
+  left_join(zip_lat, by = c("ems_zip" = "zip"), copy = FALSE) %>%
+  rename(c("latitude"="ems_lat",  "longitude" = "ems_long"))
+
+#REARRANGE INCIDENT ID AND DISTANCE BY THE SHORTEST DISTANCE FOR EACH INCIDENT
+temp = temp %>%
+  mutate(
+    distance = get_geo_distance(injury_long, injury_lat, ems_long, ems_lat),
+    drive_dist_from_ems = (distance + 1)*1.3, 
+    ground_time_from_ems = drive_dist_from_ems/40 * 60
+  ) %>%
+  select(incident_id, ems_zip, drive_dist_from_ems, ground_time_from_ems) %>%
+  arrange(incident_id, drive_dist_from_ems)
+
+#SELECT THE FIRST ROW OF EACH INCIDENT ID TO THE SHORTEST DISTANCE WHICH IS ARRANGED IN THE 
+# STEP ABOVE
+closest_ems=sqldf('SELECT *, min(rowid) row_names 
+              FROM temp
+              group BY incident_id')
+
+clean_trauma1 = clean_trauma1 %>%
+  left_join(closest_ems, by=c("incident_id"))
+
+#---------------------------------------------------------------------------#
+#               DEFINE RURAL/URBAN AREA OF INJURY SCENE                     #
+#---------------------------------------------------------------------------#
+zipcode_info$zip_code = as.character(zipcode_info$zip_code)
+clean_trauma1 = clean_trauma1 %>%
+  left_join(zipcode_info, by=c( "injury_zip_tr5_6" = "zip_code")) 
 
 #---------------------------------------------------------------------------#
 #               DEFINE OUTCOME IF HELICOPTER IS NEEDED OR NOT?              #
@@ -451,12 +493,16 @@ to_scene=to_scene%>%
 
 clean_trauma1$days_in_hospital = as.numeric(clean_trauma1$hospital_discharge_date_tr25_34 - 
                                               clean_trauma1$ed_acute_care_admission_date_tr18_55)
+
 clean_trauma1 = clean_trauma1 %>% mutate(Outcome = case_when(
   (ed_acute_care_disposition_tr17_27 %in% c("Deceased/Expired", "Intensive Care Unit", "Operating room" ,
                                             "Trasferred to another hospital") |
      hospital_discharge_disposition_tr25_27 %in%  c("Deceased/Expired", "Died in the hospital")) ~ 'Y',
-  (days_in_hospital >=1  & travel_tine > 60 ) ~ 'Y',
+  (days_in_hospital >=1  & drive_dist_to_facility > 59 ) ~ 'Y',
   (days_in_hospital < 1) ~ 'N',
   TRUE ~ 'N'
 ))
+
+
+clean_trauma1=clean_trauma1[,order(names(clean_trauma1))]
 
