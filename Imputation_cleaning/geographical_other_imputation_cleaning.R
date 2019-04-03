@@ -317,6 +317,36 @@ trauma=trauma[!(trauma$patient_gender_tr1_15 == 'Not Applicable' |
 trauma=trauma[!is.na(trauma$patient_age_tr1_12), ]
 
 #---------------------------------------------------------------------------------------------------#
+#3 PATIENT UNITS HAVE MONTHS/DAYS BUT CARRY A MEDICARE. THEY HAVE OTHER FIELDS WHICH INDICATE 
+# THEY ARE NOT CHILDREN.  SO CHANGING UNITS TO YEARS 
+# 8 OTHER PATIENT UNITS WITH MONTHS/DAYS CARRY A MEDICARE BUT THEIR AGE CANNOT BE DETERMINED.
+# HENCE 8 ROWS WILL BE DELETED
+#---------------------------------------------------------------------------------------------------#
+test=trauma%>%
+     filter((patient_age_units_tr1_14 == "Months" |
+             patient_age_units_tr1_14 == "Days") &
+             financial_primary_method_of_payment_tr2_5 == "Medicare")
+
+change_years=trauma %>% 
+  filter((patient_age_units_tr1_14 == "Months" |
+            patient_age_units_tr1_14 == "Days") &
+           financial_primary_method_of_payment_tr2_5 == "Medicare" &
+           patient_age_tr1_12 > 10) %>%
+  mutate(patient_age_units_tr1_14 = "Years")
+
+trauma=trauma %>%
+  filter(!incident_id %in% test$incident_id) %>%
+  rbind(change_years)
+
+#---------------------------------------------------------------------------------------------------#
+#  REMOVE ED-ACUTE CARE DISPOSITION OF 'NOT APPLICABLE', 'NOT KNOWN', 'NOT KNOWN/NOT RECORDED       #
+#---------------------------------------------------------------------------------------------------#
+trauma=trauma %>%
+  filter(! (ed_acute_care_disposition_tr17_27 == 'Not Applicable' |
+              ed_acute_care_disposition_tr17_27 == 'Not Known' |
+              ed_acute_care_disposition_tr17_27 == 'Not Known/Not Recorded'))
+
+#---------------------------------------------------------------------------------------------------#
 #Check the missing values in facility, ems service and zip code
 #---------------------------------------------------------------------------------------------------#
 sum(is.na(trauma$facility_name_y))

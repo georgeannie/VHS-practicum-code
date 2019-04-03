@@ -19,8 +19,8 @@ library(tibble)
 library('RPostgreSQL')
 library(lazyeval)
 
-source("function_aws_rds_access.R")
-source("function_impute_zip_ems_facility.R")
+source("/home/rstudio/R/VHS_github/VHS-practicum-code/aws_rds_access.R")
+source("/home/rstudio/R/VHS_github/VHS-practicum-code/Imputation_cleaning/function_impute_zip_ems_facility.R")
 
 pg = dbDriver("PostgreSQL")
 con=dbConnect(pg, 
