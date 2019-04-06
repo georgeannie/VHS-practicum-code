@@ -310,7 +310,8 @@ trauma=trauma[trauma$inter_facility_transfer_tr25_54 == 'No',]
 trauma=trauma[!(trauma$patient_gender_tr1_15 == 'Not Applicable' |
                 is.na(trauma$patient_gender_tr1_15) |
                 trauma$patient_gender_tr1_15 == '-Select-'),]
-
+                trauma$patient_gender_tr1_15 == "Not Known" |
+                trauma$patient_gender_tr1_15 ==  "Not Known/Not Recorded"),]
 #---------------------------------------------------------------------------------------------------#
 #REMOVE ALL MISSING AGE
 #---------------------------------------------------------------------------------------------------#

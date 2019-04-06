@@ -426,7 +426,7 @@ temp = temp %>%
   mutate(
     distance = get_geo_distance(injury_long, injury_lat, facility_long, facility_lat),
     drive_dist_to_facility = round((distance + 1)*1.30, 2),
-    ground_time_to_facility = round(drive_dist_to_facility/40 * 60, 0)
+    ground_time_to_facility = round(drive_dist_to_facility/30 * 60, 0)
   ) %>%
   select(incident_id, drive_dist_to_facility, ground_time_to_facility )
 
@@ -460,7 +460,7 @@ temp = temp %>%
   mutate(
     distance = get_geo_distance(injury_long, injury_lat, ems_long, ems_lat),
     drive_dist_from_ems = round((distance + 1)*1.3, 2), 
-    ground_time_from_ems = round(drive_dist_from_ems/40 * 60, 0)
+    ground_time_from_ems = round(drive_dist_from_ems/30 * 60, 0)
   ) %>%
   select(incident_id, ems_zip, drive_dist_from_ems, ground_time_from_ems) %>%
   arrange(incident_id, drive_dist_from_ems)
@@ -497,8 +497,9 @@ clean_trauma1$days_in_hospital = as.numeric(clean_trauma1$hospital_discharge_dat
 clean_trauma1 = clean_trauma1 %>% mutate(Outcome = case_when(
   (ed_acute_care_disposition_tr17_27 %in% c("Deceased/Expired", "Intensive Care Unit", "Operating room" ,
                                             "Trasferred to another hospital") |
-     hospital_discharge_disposition_tr25_27 %in%  c("Deceased/Expired", "Died in the hospital")) ~ 'Y',
-  (days_in_hospital >=1  & drive_dist_to_facility > 59 ) ~ 'Y',
+     hospital_discharge_disposition_tr25_27 %in%  c("Deceased/Expired", "Died in the hospital")) &
+     ground_time_to_facility  > 59 ~ 'Y',
+  (days_in_hospital >=1  & ground_time_to_facility  > 59 ) ~ 'Y',
   (days_in_hospital < 1) ~ 'N',
   TRUE ~ 'N'
 ))
