@@ -201,10 +201,10 @@ sum(is.na(trauma$ems_service_name_tr7_3_y))
 #               Still 66  missing facility name missing                    #  
 #---------------------------------------------------------------------------#
 trauma=unique_entry(df=trauma, 
-                    var1=facility_name_y,
+                    var1=facility_name,
                     distinct_var2 = injury_zip_tr5_6, 
                     key_var =incident_id)
-sum(is.na(trauma$facility_name_y))
+sum(is.na(trauma$facility_name))
 
 #-------------------STEP XVI - Imputation for facility name ----------------#
 # Find most common ems for each facility and impute facility name           #
@@ -309,13 +309,22 @@ trauma=trauma[trauma$inter_facility_transfer_tr25_54 == 'No',]
 #---------------------------------------------------------------------------------------------------#
 trauma=trauma[!(trauma$patient_gender_tr1_15 == 'Not Applicable' |
                 is.na(trauma$patient_gender_tr1_15) |
-                trauma$patient_gender_tr1_15 == '-Select-'),]
+                trauma$patient_gender_tr1_15 == '-Select-' |
                 trauma$patient_gender_tr1_15 == "Not Known" |
                 trauma$patient_gender_tr1_15 ==  "Not Known/Not Recorded"),]
 #---------------------------------------------------------------------------------------------------#
 #REMOVE ALL MISSING AGE
 #---------------------------------------------------------------------------------------------------#
 trauma=trauma[!is.na(trauma$patient_age_tr1_12), ]
+
+#---------------------------------------------------------------------------------------------------#
+#REMOVE 'NOT APPLICABLE' PATIENT AGE UNITS
+#---------------------------------------------------------------------------------------------------#
+trauma=trauma %>% 
+  filter(patient_age_units_tr1_14 == 'Years' |
+           patient_age_units_tr1_14 == 'Months' |
+           patient_age_units_tr1_14 == 'Days')
+
 
 #---------------------------------------------------------------------------------------------------#
 #3 PATIENT UNITS HAVE MONTHS/DAYS BUT CARRY A MEDICARE. THEY HAVE OTHER FIELDS WHICH INDICATE 

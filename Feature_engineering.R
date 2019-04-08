@@ -504,6 +504,24 @@ clean_trauma1 = clean_trauma1 %>% mutate(Outcome = case_when(
   TRUE ~ 'N'
 ))
 
+#---------------------------------------------------------------------------#
+#               DEFINE OUTCOME WTHOUT TIME FOR AMPT SCORE                   #
+#    DISPOSTION - DECEASED/EXPIRED, ICU, OR OR TRANSFER, OUTCOME IS Y       #
+#    DAYS IN HOSPITAL <1, OUTCOME IS N                                      #
+#    DAYS IN HOSPITAL > 0 AND TIME TO HOSPITAL > 60 MINS, OUTCOME IS Y      #
+#    ELSE, N                                                                #  
+#---------------------------------------------------------------------------#
+clean_trauma1 = clean_trauma1 %>% mutate(ampt_score_Outcome = case_when(
+  (ed_acute_care_disposition_tr17_27 %in% c("Deceased/Expired", "Intensive Care Unit", 
+                                            "Operating room" ,
+                                            "Trasferred to another hospital") |
+     hospital_discharge_disposition_tr25_27 %in%  
+                       c("Deceased/Expired", "Died in the hospital")) ~ 'Y',
+  (days_in_hospital >=1) ~ 'Y',
+  (days_in_hospital < 1) ~ 'N',
+  TRUE ~ 'N'
+))
+
 
 clean_trauma1=clean_trauma1[,order(names(clean_trauma1))]
 
