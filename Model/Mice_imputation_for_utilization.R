@@ -1,15 +1,37 @@
-#----------------------------------UTILIZATION MODEL --------------------------#
-# IMPUTATION + TESTS + LOGISTIC REGRESSION + DECISION TREE  
-#  THE INPUT TO THIS IS FROM THE HYPOTHESIS TEST WHICH INCLUDES REMOVAL AND    #
-#  AND REPLACING OF OUTLIERS
+#-----------------IMPUTATION & HYPOTHESIS TEST OF IMPUTED FIELDS----------#
+# THIS PROGRAM IMPUTES THE PREHOSPITAL SBP, PULSE RATE, OXIMETRY AND RESP RATE #
+# MULTIPLE IMPUTATION (MICE) IS USED FOR THIS PURPOSE. MULTIPLE TESTS ARE      #
+# TO DETERMINE THE CORRECT IMPUTED SET OUT OF 5 WHICH IS GENERATED USING       #
+# OF INTEREST - AGE, GENDER, VEHICLE ACCIDENT, TRANSPORT, OUTCOME, AMPT SCORE  #
+# ALL OTHER VARIABLES ARE RETAINED IN THE DATASET FOR MDODELING                #
+#                                                                              #   
+# IMPORTANT ** THIS PROGRAM MUST BE RUN AFTER HYPOTHESIS TEST AS THE OUTLIERS  #
+# AND INCONSISTENCY IN THE PROGRAM IS CARRIED OVER PRIOR TO IMPUTATION         #
+# 
+# ALL IMPUTATIONS
+# TWO TABLES ARE CREATED IN POSTGRESS WHICH CONTAINS THE BEST OF 5 IMPUTED SETS#
+#  TO BE USED FOR MODELING                                                     #
 #------------------------------------------------------------------------------#
-library(caret)
-library(DMwR)
+library(mice)
+library(finalfit)
+library(VIM)
 library(dplyr)
+library(ggpubr)
+library(naniar)
+
 set.seed(9560)
 
 
+#------------------------------------------------------------------------------#
+# USE MODIFIED FEATURE SET FROM HYPOTHESIS_TEST.R PROGRAM DUE TO OUTLIER       #
+# IDENTIFIED
+#------------------------------------------------------------------------------#
+
 feature_set2 = feature_set1
+
+#------------------------------------------------------------------------------#
+# CONVERT VARIABLES FOR TO FACTORS                                             #
+#------------------------------------------------------------------------------#
 
 feature_set2 = feature_set2 %>%
   mutate( Outcome = as.factor(Outcome),
@@ -20,9 +42,6 @@ feature_set2 = feature_set2 %>%
           drug_use = as.factor(drug_use_indicator_tr18_45),
           alcohol_use = as.factor(alcohol_intervention_alcohol_screen_tr18_46),
           rural_ind = as.factor(rural_ind), 
-          sbpinrange = as.factor(sbpinrange), 
-          pulseinrange = as.factor(pulseinrange), 
-          respinrange = as.factor(respinrange), 
           gcs_eye=as.factor(prehospital_gcs_eye),
           gcs_motor = as.factor(prehospital_gcs_motor),
           gcs_verbal = as.factor(prehospital_gcs_verbal),
@@ -51,45 +70,57 @@ feature_set2 = feature_set2 %>%
           pre_sbp=prehospital_sbp_tr18_67,
           pre_resp = prehospital_respiratory_rate_tr18_70)
 
-#convert categorical variables to factors
+#---------------------------------------------------------------------#
+#CONVERT REQUIRED FEATURES THAT ARE CATEGORICAL TO FACTORS            #
+# CAN BE USED FOR MODELING
+#---------------------------------------------------------------------#
 fac_list=feature_set2 %>%
   select(transport , AgeBin, vehicle_accident,
          drug_use, alcohol_use,
-         rural_ind, decimal_years,
-         gcs_eye_num, gcs_motor_num, gcs_verbal_num,
-         gcs_total_manual_imp, 
+         rural_ind, 
          age, gender, 
          hospital_discharge_disp, 
          ed_discharge_disp, ed_death,
          method_of_payment, 
          ems_unit_notified_time_of_day, 
-         ems_notify_time_hour, trauma_level, years, ampt_score_Outcome, Outcome,
-         gcs_severity_flag, gcs_total_match_flag, sbpinrange, pulseinrange, respinrange,
-         oximetryinrange, gcs_total_match_flag, incident_id, ems_service_name_tr7_3_y
+         trauma_level, years, ampt_score_Outcome, Outcome,
+         gcs_severity_flag, gcs_total_match_flag, gcs_total_match_flag, incident_id,
+         ems_service_name_tr7_3_y
   )
 
+#---------------------------------------------------------------------#
+# LIST NUMERICAL FEATURES                                             #
+# CAN BE USED FOR MODELING                                            #
+#---------------------------------------------------------------------#
+
 num_list = feature_set2 %>%
-  select(pre_oxi, pre_resp,
+  select(pre_oxi, pre_resp, decimal_years,
          pre_sbp, pre_pulse, drive_dist_from_ems, drive_dist_to_facility, ground_time_from_ems,
-         ground_time_to_facility, incident_date_tr5_1, incident_time_tr5_18
+         ground_time_to_facility, incident_date_tr5_1, incident_time_tr5_18, ems_notify_time_hour,
+         gcs_eye_num, gcs_motor_num, gcs_verbal_num,
+         gcs_total_manual_imp
          )
 
 new_feature=cbind(num_list, fac_list)         
 
-#------------------------------------------------------------------------------------------------
-#glimpse of missing data - counts and percentage of missing cat and num varibale
-# 
-#-------------------------------------------------------------------------------------------------
-library(naniar)
+#----------------------------------------------------------------------#
+# SUMMARY OF MISSING DATA                                              #
+# GRAPHICAL REPRESENTATION
+#----------------------------------------------------------------------#
 
 gg_miss_var(new_feature)
 
 miss_var_summary(new_feature)
 
-#NUMBER OF NA IN THE DATA
 sort(sapply(new_feature, function(x) { sum(is.na(x)) }), decreasing=TRUE)
 
-#pattern of missingness
+
+#----------------------------------------------------------------------#
+#PATTERN OF MISSINGNESS - MORE PREHOSPITAL MISSING FOR FEMALES         #
+# PREHOSPITAL PARMS CAN BE DETERMINED FROM OTHER FIELDS - MISSING AT   #
+# RANDOM (MAR)                                                         #
+#----------------------------------------------------------------------#
+
 missing_by_gender=new_feature  %>% 
   group_by(gender) %>%
   miss_var_summary()
@@ -98,56 +129,45 @@ missing_by_age=new_feature  %>%
   group_by(AgeBin) %>%
   miss_var_summary()
 
-
 missing_by_age_gender= new_feature%>% 
   group_by(AgeBin, gender) %>%
   miss_var_summary()
 
-#--------------------------IMPUTATION ----------------------------------#
-library(mice)
-library(finalfit)
-library(VIM)
+#-------------------------------------------------------------------#
+# ANALYZE THE MISSINGESS AND ENSURE IT IS MAR                       #
+# MARGIN PLOT SHOWS ALL THESE FIELDS ARE MAR THAT IS THEY DO NOT    #
+# HAVE RED/BLUE BOX OF SAME SIZE                                    #
+#-------------------------------------------------------------------#
 
-#----------------------------------------------------------
-#IMPUTATION FOR SBP, PULSE, OXI, RESP, GCS INDI
-#All the numericals are misssing at random MAR
-#----------------------------------------------------------
-#MARGIN PLOT SHOWS ALL THESE FIELDS ARE MAR THAT IS THEY DO NOT HAVE RED/BLUE BOX SAME
 marginplot(new_feature[, c("pre_sbp", "pre_pulse")], col = mdc(1:2), cex.numbers = 1.2, pch = 19)
 marginplot(new_feature[, c("pre_sbp", "pre_oxi")], col = mdc(1:2), cex.numbers = 1.2, pch = 19)
 marginplot(new_feature[, c("pre_sbp", "pre_resp")], col = mdc(1:2), cex.numbers = 1.2, pch = 19)
 
-#--------------------------------------PRODUCTION CHANGE ----------------------------------------#
-#change m and maxit in production to avoid bias due to simulation, The higher number of iterations
-#the better
-#------------------------------------------------------------------------------------------------#
 #------------------------------------IMPUTATION -------------------------------------------------#
-# RUN A DRY RUN WITHOUT ITERATIONS TO GET THE PREDICTION MATRIX AND MARK THE IMPORTANT VARIABLES 
+# DRY RUN WITHOUT ITERATIONS TO GET THE PREDICTION MATRIX AND MARK THE IMPORTANT VARIABLES 
 # TO BE USED FOR IMPUTATION OF THE MISSING VARIABLES - IMPORTANT VARIABLES CONSIDERED ARE AGE,
-# GENDER, VEHICLE ACCIDENT, DRUG, ALCOHOL, ED DISPOSITION, outcome and AMPT SCORE OUTCOME                 
+# ED DEATH, GENDER, VEHICLE ACCIDENT, DRUG, ALCOHOL, ED DISPOSITION, OUTCOME AND AMPT SCORE OUTCOME                 
 #-----------------------------------------------------------------------------------------------#
 dry_run = mice(new_feature, maxit=0, print=FALSE)
+
+#SET PREDICTORS THAT WILL NOT BE USED TO DETERMINE THE IMPUTATION AS ZERO
+
 pred=dry_run$predictorMatrix
 pred[,c('method_of_payment', 
         'ems_notify_time_hour', 'ems_unit_notified_time_of_day', 'trauma_level',
          'hospital_discharge_disp', 'rural_ind', 'gcs_total_manual_imp', 'gcs_eye_num',
         'gcs_verbal_num', 'gcs_motor_num', 'gcs_severity_flag', 'gcs_total_match_flag', 
-        'sbpinrange', 'pulseinrange', 'respinrange', 'decimal_years',
-        'oximetryinrange', 'gcs_total_match_flag', 'gcs_total_manual_imp',
-        'ed_discharge_disp', 'ed_death')] = 0
+        'decimal_years', 'ground_time_to_facility', 'ground_time_from_ems', 'drive_dist_to_facility',
+        'drive_dist_from_ems',  'incident_date_tr5_1', 
+        'incident_time_tr5_18', 'age', 'incident_id',
+        'ed_discharge_disp')] = 0
 
 pred
 
+#SET NO IMPUTATION FOR FIELDS THAT WILL NOT BE IMPUTED
+
 meth=dry_run$meth
-meth['method_of_payment'] = ''
 meth['ems_notify_time_hour'] = ''
-meth['gcs_severity_flag']= ''
-meth['gcs_total_match_flag']=''  
-meth['sbpinrange']='' 
-meth['pulseinrange']=''
-meth['respinrange']=''
-meth['decimal_years']=''
-meth['oximetryinrange']=''
 meth['ed_discharge_disp'] = ''
 meth['ed_death'] = ""
 meth['ems_unit_notified_time_of_day'] = ""
@@ -155,36 +175,38 @@ meth['trauma_level']= ""
 meth['hospital_discharge_disp'] = ""
 meth['rural_ind'] = "" 
 meth['method_of_payment'] = "" 
-meth['gcs_total_manual_imp']  = ""
-meth['gcs_eye_num']  = ""
-meth['gcs_verbal_num']  = ""
-meth['gcs_motor_num']  = ""
+meth['ground_time_to_facility']  = ""
+meth['drive_dist_to_facility']  = ""
+meth['ground_time_from_ems']  = ""
+meth['gcs_total_match_flag']  = ""
+meth['gcs_severity_flag']  = ""
+meth['drive_dist_from_ems']  = ""
+meth
+#----------------------------------PRODUCTION RUN FOR IMPUTATION --------------------#
+# 5 IMPUTED SET WITH 30 ITERATIONS WILL BE GENERATED                                 #
+#------------------------------------------------------------------------------------#
 
 library(nnet)
 impData=mice(new_feature , seed=500, 
-             print=TRUE, maxit = 30, m=5, pred=pred, meth=meth, nnet.MaxNWts=4000)
+             print=TRUE, maxit = 2, m=2, pred=pred, meth=meth, nnet.MaxNWts=4000)
 
+#-------------------------------------------------------------------#
+# ANALYZE THE IMPUTED DATA IF THEY ARE SIMILAR TO THE ORIGINAL DATA #
+# ANALYSIS PLOTS SHOW SETS ??? ARE GOOD
+#-------------------------------------------------------------------#
 plot(impData)
 
-#predictors used to impute the missing features
-# pulse rate
-# sbp
-# pulse oximetry
-# resp rate
-# gcs eye
-# gcs verbal
-# gcs motor
+stripplot(impData, pre_oxi + pre_sbp + pre_pulse + pre_resp ~ .imp, pch = 20, cex = 1.2)
 
-#check how different the numerical imputed data are
-stripplot(impData, pch = 20, cex = 1.2)
+densityplot(impData, ~pre_oxi + pre_sbp + pre_pulse + pre_resp)
 
-densityplot(impData)
 xyplot(impData, pre_oxi ~ pre_sbp | .imp, pch = 20, cex = 1.4)
 xyplot(impData, pre_oxi ~ pre_pulse | .imp, pch = 20, cex = 1.4)
 xyplot(impData, pre_oxi ~ pre_resp | .imp, pch = 20, cex = 1.4)
-xyplot(impData, pre_oxi ~ gcs_eye | .imp, pch = 20, cex = 1.4)
-xyplot(impData, pre_oxi ~ gcs_verbal | .imp, pch = 20, cex = 1.4)
-xyplot(impData, pre_oxi ~ gcs_motor | .imp, pch = 20, cex = 1.4)
+
+#-------------------------------------------------------------------#
+# SAVE ALL IMPUTED SETS   
+#-------------------------------------------------------------------#
 
 df1=mice::complete(impData, 1)
 df2=mice::complete(impData, 2)
@@ -198,59 +220,261 @@ write.csv(df3, "/home/rstudio/trauma/imputed_data_df3.csv")
 write.csv(df4, "/home/rstudio/trauma/imputed_data_df4.csv")
 write.csv(df5, "/home/rstudio/trauma/imputed_data_df5.csv")
 
+#--------------------------TESTS OF IMPUTATION-------------------------#
+# STACK ALL IMPUTED DATASETS AND GET THE MEAN AND SD FOR EACH SET  AND 
+# FOR EACH IMPUTED FIELD
+#----------------------------------------------------------------------#
+sum(is.na(impData$imp$pre_oxi))
+
+sum(is.na(impData$imp$pre_resp))
+
+sum(is.na(impData$imp$pre_sbp))
+
+sum(is.na(impData$imp$pre_pulse))
+
 final_imp_data =  mice::complete(impData, "long", include=TRUE)
-# compute mean and standard deviation in each imputed dataset - SBP
+
+#--------------------------SBP MEAN AND SD ----------------------------#
+#                 MEAN      SD
+# ORIGINAL SET
+# SET 1:
+# SET 2:
+# SET 3:
+# SET 4:
+# SET 4:
+#----------------------------------------------------------------------#
 pool_mean_sbp = with(final_imp_data, by(final_imp_data, .imp, 
                               function(x) c(mean(x$pre_sbp, na.rm = TRUE),sd(x$pre_sbp, na.rm = TRUE))))
 pool_mean_sbp
-Reduce("+",pool_mean_sbp)/length(pool_mean_sbp)
 
 
-# compute mean and standard deviation in each imputed dataset - resp
+#--------------------------RESP MEAN AND SD ----------------------------#
+#                 MEAN      SD
+# ORIGINAL SET
+# SET 1:
+# SET 2:
+# SET 3:
+# SET 4:
+# SET 4:
+#----------------------------------------------------------------------#
+
 pool_mean_resp = with(final_imp_data, by(final_imp_data, .imp, 
                               function(x) c(mean(x$pre_resp, na.rm = TRUE),sd(x$pre_resp, na.rm = TRUE))))
 pool_mean_resp
-Reduce("+",pool_mean_resp)/length(pool_mean_resp)
 
-# compute mean and standard deviation in each imputed dataset - oxi
+#--------------------------OXI MEAN AND SD ----------------------------#
+#                 MEAN      SD
+# ORIGINAL SET
+# SET 1:
+# SET 2:
+# SET 3:
+# SET 4:
+# SET 4:
+#----------------------------------------------------------------------#
+
 pool_mean_oxi = with(final_imp_data, by(final_imp_data, .imp, 
                               function(x) c(mean(x$pre_oxi, na.rm = TRUE),sd(x$pre_oxi, na.rm = TRUE))))
 pool_mean_oxi
-Reduce("+",pool_mean_oxi)/length(pool_mean_oxi)
 
+#--------------------------PULSE MEAN AND SD ----------------------------#
+#                 MEAN      SD
+# ORIGINAL SET
+# SET 1:
+# SET 2:
+# SET 3:
+# SET 4:
+# SET 4:
+#----------------------------------------------------------------------#
 
-# compute mean and standard deviation in each imputed dataset - pulse
 pool_mean_pulse = with(final_imp_data, by(final_imp_data, .imp, 
-                            function(x) c(mean(x$pre_pulse, na.rm = TRUE),sd(x$pre_pulse, na.rm = TRUE))))
+                            function(x) c(mean(x$pre_pulse, na.rm = TRUE),
+                                          sd(x$pre_pulse, na.rm = TRUE))))
 pool_mean_pulse
+
+#----------TEST ZONE FIELD:  HYPOTHESIS TESTING USING IMPUTED SETS---------------#
+
+
+imp_set=df1                 #----> CHANGE FOR ALLL IMPUTED SETS
+
+
+#--------------------------------TEST SBP----------------------------------------#
+#NULL HYP: There is no difference in sbp for patients that need a helicopter
+#and those that do not using the ampt score
+#RESULT: THERE IS SIGNIFICANT DIFF IN SBP FOR THE 2 GROUPS
+#---------------------------------------------------------------------------------#
+# ANALYSIS OF SBP ALONE: CHECK NORMAL DISTRIBUTION, SUMMARY, OUTLIERS
+#---------------------------------------------------------------------------------#
+
+hist(imp_set$pre_sbp)
+ggqqplot(imp_set$pre_sbp)
+
+summary(imp_set$pre_sbp)
+
+ggboxplot(imp_set, x = "ampt_score_Outcome", y = "pre_sbp", 
+          color = "ampt_score_Outcome", palette = c("red", "blue"),
+          order = c("Y", "N"),
+          ylab = "SBP", xlab = "Outcome")
+
+#---------------------------------------------------------------------------------#
+#ANALYSIS OF PAIRED TEST: COMPUTE DIFFERENCE OF TWO GROUPS AND TEST NORMALITY OF  #
+# SBP IN THE 2 GROUPS AND CHECK NORMAL DISTRIBUTION
+#---------------------------------------------------------------------------------#
+
+diff <- with(imp_set, 
+             pre_sbp[ampt_score_Outcome == "N"] - 
+               pre_sbp[ampt_score_Outcome == "Y"])
+hist(diff)
+
+#---------------------------------------------------------------------------------#
+#CHECK UNEQUAL VARIANCE. SET TRUE/FALSE BASED ON VARIANCE
+#---------------------------------------------------------------------------------#
+
+res =  bartlett.test(pre_sbp ~ ampt_score_Outcome, data = imp_set)
+res
+res =  bartlett.test(pre_sbp ~ interaction(AgeBin, gender), data = imp_set)
+res
+
+#---------------------------------------------------------------------------------#
+#  WELCH'S T-TEST
+#---------------------------------------------------------------------------------#
+
+t.test(pre_sbp ~ ampt_score_Outcome, data = imp_set, var.equal=FALSE)
+
+#-----------------------------------TEST RESP------------------------------------#
+#NULL HYP: There is no difference in resp rate for patients that need a helicopter
+#and those that do not using the ampt score
+#RESULT: THERE IS SIGNIFICANT DIFF IN SBP FOR THE 2 GROUPS
+#---------------------------------------------------------------------------------#
+# ANALYSIS OF SBP ALONE: CHECK NORMAL DISTRIBUTION, SUMMARY, OUTLIERS
+#---------------------------------------------------------------------------------#
+
+hist(imp_set$pre_resp)
+ggqqplot(imp_set$pre_resp)
+
+summary(imp_set$pre_resp)
+
+ggboxplot(imp_set, x = "ampt_score_Outcome", y = "pre_resp", 
+          color = "ampt_score_Outcome", palette = c("red", "blue"),
+          order = c("Y", "N"),
+          ylab = "RESP RATE", xlab = "Outcome")
+
+#---------------------------------------------------------------------------------#
+#ANALYSIS OF PAIRED TEST: COMPUTE DIFFERENCE OF TWO GROUPS AND TEST NORMALITY OF  #
+# SBP IN THE 2 GROUPS AND CHECK NORMAL DISTRIBUTION
+#---------------------------------------------------------------------------------#
+library(outliers)
+outlier(imp_set$pre_resp)
+
+ggboxplot(imp_set, x = "ampt_score_Outcome", y = "pre_resp", 
+          color = "ampt_score_Outcome", palette = c("red", "blue"),
+          order = c("Y", "N"),
+          ylab = "RESP RATE", xlab = "Outcome")
+
+diff <- with(imp_set, 
+             pre_resp[ampt_score_Outcome == "N"] - 
+               pre_resp[ampt_score_Outcome == "Y"])
+hist(diff)
+ggqqplot(diff)
+
+#---------------------------------------------------------------------------------#
+#CHECK UNEQUAL VARIANCE. SET TRUE/FALSE BASED ON VARIANCE
+#---------------------------------------------------------------------------------#
+res =  bartlett.test(pre_resp ~ ampt_score_Outcome, data = imp_set)
+res
+res =  bartlett.test(pre_resp ~ interaction(AgeBin, gender), data = imp_set)
+res
+
+#---------------------------------------------------------------------------------#
+#  WELCH'S T-TEST
+#---------------------------------------------------------------------------------#
+t.test(pre_resp ~ ampt_score_Outcome, data = imp_set, var.equal=FALSE)
+
+
+#-----------------------------------TEST PULSE RATE------------------------------#
+#NULL HYP: There is no difference in pulse rate for patients that need a helicopter
+#and those that do not using the ampt score
+#RESULT: THERE IS SIGNIFICANT DIFF IN SBP FOR THE 2 GROUPS
+#---------------------------------------------------------------------------------#
+# ANALYSIS OF SBP ALONE: CHECK NORMAL DISTRIBUTION, SUMMARY, OUTLIERS
+#---------------------------------------------------------------------------------#
+
+library(ggplot2)
+hist(imp_set$pre_pulse)
+ggqqplot(imp_set$pre_pulse)
+
+summary(imp_set$pre_pulse)
+
+ggboxplot(imp_set, x = "ampt_score_Outcome", y = "pre_pulse", 
+          color = "ampt_score_Outcome", palette = c("red", "blue"),
+          order = c("Y", "N"),
+          ylab = "PULSE RATE", xlab = "Outcome")
+
+#---------------------------------------------------------------------------------#
+#ANALYSIS OF PAIRED TEST: COMPUTE DIFFERENCE OF TWO GROUPS AND TEST NORMALITY OF  #
+# SBP IN THE 2 GROUPS AND CHECK NORMAL DISTRIBUTION
+#---------------------------------------------------------------------------------#
+diff <- with(imp_set, 
+             pre_pulse[ampt_score_Outcome == "N"] - 
+               pre_pulse[ampt_score_Outcome == "Y"])
+hist(diff)
+
+#---------------------------------------------------------------------------------#
+#CHECK UNEQUAL VARIANCE. SET TRUE/FALSE BASED ON VARIANCE
+#---------------------------------------------------------------------------------#
+res =  bartlett.test(pre_pulse ~ ampt_score_Outcome, data = imp_set)
+res
+res =  bartlett.test(pre_pulse ~ interaction(AgeBin, gender), data = imp_set)
+res
+
+#---------------------------------------------------------------------------------#
+#  WELCH'S T-TEST
+#---------------------------------------------------------------------------------#
+t.test(pre_pulse ~ ampt_score_Outcome, data = imp_set, var.equal=FALSE)
+
+#-----------------------------------TEST OXI----------------------------------------#
+#NULL HYP: There is no difference in oximetry rate for patients that need a helicopter
+#and those that do not using the ampt score
+#RESULT: THERE IS SIGNIFICANT DIFF IN SBP FOR THE 2 GROUPS
+#---------------------------------------------------------------------------------#
+# ANALYSIS OF SBP ALONE: CHECK NORMAL DISTRIBUTION, SUMMARY, OUTLIERS
+#---------------------------------------------------------------------------------#
+
+hist(imp_set$pre_oxi)
+ggqqplot(imp_set$pre_oxi)
+
+summary(imp_set$pre_oxi)
+
+ggboxplot(imp_set, x = "ampt_score_Outcome", y = "pre_oxi", 
+          color = "ampt_score_Outcome", palette = c("red", "blue"),
+          order = c("Y", "N"),
+          ylab = "OXIMETRY RATE", xlab = "Outcome")
+
+#---------------------------------------------------------------------------------#
+#ANALYSIS OF PAIRED TEST: COMPUTE DIFFERENCE OF TWO GROUPS AND TEST NORMALITY OF  #
+# SBP IN THE 2 GROUPS AND CHECK NORMAL DISTRIBUTION
+#---------------------------------------------------------------------------------#
+diff <- with(imp_set, 
+             pre_oxi[ampt_score_Outcome == "N"] - 
+               pre_oxi[ampt_score_Outcome == "Y"])
+hist(diff)
+
+#---------------------------------------------------------------------------------#
+#CHECK UNEQUAL VARIANCE. SET TRUE/FALSE BASED ON VARIANCE
+#---------------------------------------------------------------------------------#
+res =  bartlett.test(pre_oxi ~ ampt_score_Outcome, data = imp_set)
+res
+res =  bartlett.test(pre_oxi ~ interaction(AgeBin, gender), data = imp_set)
+res
+
+#---------------------------------------------------------------------------------#
+#  WELCH'S T-TEST
+#---------------------------------------------------------------------------------#
+t.test(pre_oxi ~ ampt_score_Outcome, data = imp_set, var.equal=FALSE)
 
 source("C:/Users/User/Documents/VHS-practicum-code/function_imputation_mice.R")
 final_imp_data=sep_gcs(final_imp_data, gcs_eye, gcs_motor, gcs_verbal)
 
-#POOL INDEPENDENT T-TEST ON PRE-OXI
-fit_pre_oxi <- with(data=impData, exp=lm(pre_oxi ~ Outcome))
-fit_pre_oxi_estimates <- pool(fit_pre_oxi)  
-summary(fit_pre_oxi_estimates)
-
-
-#POOL INDEPENDENT T-TEST ON PRE-RESP
-fit_pre_resp <- with(data=impData, exp=lm(pre_resp ~ Outcome))
-fit_pre_resp_estimates <- pool(fit_pre_resp)  
-summary(fit_pre_resp_estimates)
-
-
-#POOL INDEPENDENT T-TEST ON PRE-SBP
-fit_pre_sbp <- with(data=impData, exp=lm(pre_sbp ~ Outcome))
-fit_pre_sbp_estimates <- pool(fit_pre_sbp)  
-summary(fit_pre_sbp_estimates)
-
-#POOL INDEPENDENT T-TEST ON PRE-PULSE
-fit_pre_pulse <- with(data=impData, exp=lm(pre_pulse ~ Outcome))
-fit_pre_pulse_estimates <- pool(fit_pre_pulse)  
-summary(fit_pre_pulse_estimates)
-
-
-#DATASETS WITH GOOD MEAN AND GOOD TESTS - df5, df2
+#DATASETS WITH GOOD MEAN AND GOOD TESTS - df5, imp_set
 library('RPostgreSQL')
 
 source("/home/rstudio/R/VHS_github/VHS-practicum-code/aws_rds_access.R")
