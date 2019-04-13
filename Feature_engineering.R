@@ -142,9 +142,11 @@ filter = clean_trauma1 %>%
   mutate(ems_notify_time_hour=format(as.POSIXct(ed_acute_care_admission_time_tr18_56, 
                                                 format="%H:%M"),"%H"))
 
+
 clean_trauma1 = clean_trauma1 %>%
   filter(!incident_id %in% filter$incident_id) %>%
   rbind(filter)
+clean_trauma1$ems_notify_time_hour = as.integer(clean_trauma1$ems_notify_time_hour)
 
 #---------------------------------------------------------------------------#
 #       GET TIME OF DAY WHEN THE EMS WAS REQUESTED FOR                      #
@@ -156,8 +158,8 @@ breaks <- c("00", "5", "11", "17", "23")
 # labels for the breaks
 labels <- c("Night", "Morning", "Afternoon", "Evening")
 
-clean_trauma1$ems_unit_notified_time_of_day = cut(x=(clean_trauma1$ems_unit_notified_time_hr), 
-                                                  breaks = breaks, labels = labels, include.lowest=TRUE)
+clean_trauma1$ems_unit_notified_time_of_day = cut(x=(clean_trauma1$ems_notify_time_hour), 
+                                breaks = breaks, labels = labels, include.lowest=TRUE)
 
 #---------------------------------------------------------------------------#
 #Indication of systolic blood pressure in range based off of age.           #
@@ -499,8 +501,8 @@ clean_trauma1 = clean_trauma1 %>% mutate(Outcome = case_when(
                                             "Trasferred to another hospital") |
      hospital_discharge_disposition_tr25_27 %in%  c("Deceased/Expired", "Died in the hospital")) &
      ground_time_to_facility  > 59 ~ 'Y',
-  (days_in_hospital >=1  & ground_time_to_facility  > 59 ) ~ 'Y',
-  (days_in_hospital < 1) ~ 'N',
+  (days_in_hospital >1  & ground_time_to_facility  > 59 ) ~ 'Y',
+  (days_in_hospital <= 1) ~ 'N',
   TRUE ~ 'N'
 ))
 
@@ -517,11 +519,10 @@ clean_trauma1 = clean_trauma1 %>% mutate(ampt_score_Outcome = case_when(
                                             "Trasferred to another hospital") |
      hospital_discharge_disposition_tr25_27 %in%  
                        c("Deceased/Expired", "Died in the hospital")) ~ 'Y',
-  (days_in_hospital >=1) ~ 'Y',
-  (days_in_hospital < 1) ~ 'N',
+  (days_in_hospital >1) ~ 'Y',
+  (days_in_hospital <= 1) ~ 'N',
   TRUE ~ 'N'
 ))
-
 
 clean_trauma1=clean_trauma1[,order(names(clean_trauma1))]
 

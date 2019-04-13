@@ -10,7 +10,7 @@ library(dplyr)
 set.seed(9560)
 
 
-source("C:/Users/User/Documents/VHS-practicum-code/function_aws_rds_access.R")
+source("/home/rstudio/R/VHS_github/VHS-practicum-code/aws_rds_access.R")
 
 pg = dbDriver("PostgreSQL")
 con=dbConnect(pg, 
@@ -197,7 +197,7 @@ t.test(prehospital_respiratory_rate_tr18_70 ~ ampt_score_Outcome, data = feature
 # HISTOGRAM DOES NOT SHOW NORMAL DISTRIBUTION. QQPLOT DOES NOT SHOW NORMAL DISTRIBUTION.
 # USE ANOVA TEST 
 # SUMMARY STATS OF RESP RATE:  Median = 88, Mean = 89.45, NA = 20735, Max =273
-
+library(ggplot2)
 hist(feature_set1$prehospital_pulse_rate_tr18_69)
 ggqqplot(feature_set1$prehospital_pulse_rate_tr18_69)
 
@@ -264,6 +264,7 @@ ggboxplot(feature_set1, x = "ampt_score_Outcome", y = "prehospital_pulse_oximetr
 
 #OUTLIER OBSERVED IN BOX PLOT. The outlier is 0. THE MAJORITY ARE OBSERVED TO BE DECEASED IN ED ACUTE CARE
 #HENCE 0 IS REASONABLE
+library(outliers)
 outlier(feature_set1$prehospital_pulse_oximetry_tr18_82)
 
 test2 = feature_set1%>%
