@@ -208,7 +208,7 @@ ggboxplot(feature_set1, x = "ampt_score_Outcome", y = "prehospital_pulse_rate_tr
           order = c("Y", "N"),
           ylab = "PULSE RATE", xlab = "Outcome")
 
-#OUTLIER OBSERVED IN BOX PLOT. The outlier is 120. HENCE SET OUTLIER AS NA
+#OUTLIER OBSERVED IN BOX PLOT. The outlier is 273. HENCE SET OUTLIER AS NA
 outlier(feature_set1$prehospital_pulse_rate_tr18_69)
 test1=feature_set1 %>% 
   filter(!prehospital_pulse_rate_tr18_69 == 273 |
