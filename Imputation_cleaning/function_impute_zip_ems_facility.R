@@ -11,8 +11,7 @@ library(sqldf)
 library(dplyr)
 library(rlang)
 library(tidyverse)
-unique_entry=function(df, var1, distinct_var2, key_var){
-
+unique_entry=function(df, var1, distinct_var2, key_var, new_column){
 #---------------------------------------------------------------------------#
 #               ENQUO TO REMOVE QUOTES AND PASS ARGUMENTS AS COLUMNS        #
 #---------------------------------------------------------------------------#
@@ -20,6 +19,7 @@ unique_entry=function(df, var1, distinct_var2, key_var){
   distinct_var2_e=enquo(distinct_var2)
   df_e=enquo(df)
   key_var_e=enquo(key_var)
+  new_column_e=enquo(new_column)
   
 #---------------------------------------------------------------------------#
 #                 GROUP ENTRIES USING THE DISTINCT ARGUMENT PASSED          #
@@ -79,25 +79,28 @@ unique_entry=function(df, var1, distinct_var2, key_var){
   
   var1_new=quo_name(paste0(deparse(substitute(var1)), "_x"))
   var1_y_new=quo_name(paste0(deparse(substitute(var1)), "_y"))
-
+  
 #---------------------------------------------------------------------------#
 #   REPLACE THE NULLS IN THE ACTUAL COLUMN IN THE DATAFRAME WITH THE NEW    #
 #   COLUMN VALUE                                                            #
 #---------------------------------------------------------------------------#
   
-  final_df[is.na(final_df[,var1_new]), var1_new] = final_df[is.na(final_df[,var1_new]), var1_y_new]
-
+#  final_df[is.na(final_df[,var1_new]), var1_new] = final_df[is.na(final_df[,var1_new]), var1_y_new]
+   final_df[is.na(final_df[,var1_y_new]), var1_y_new] = 
+                                 final_df[is.na(final_df[,var1_y_new]), var1_new]
+  
 #---------------------------------------------------------------------------#
 #   REMOVE THE NEW COLUMN CREATED AFTER MERGE                               #
 #---------------------------------------------------------------------------#
   
-  final_df=final_df[,!names(final_df) %in% c(var1_y_new)]
+ # final_df=final_df[,!names(final_df) %in% c(var1_y_new)]
 
 #---------------------------------------------------------------------------#
 #   REPLACE COLUMN NAME WITH THE ACTUAL COLUMN NAME PASSED AS ARG           #
 #---------------------------------------------------------------------------#
-  names(final_df)[names(final_df) == var1_new] = as.character(deparse(substitute(var1)))    
-  return(final_df)
+   names(final_df)[names(final_df) == var1_new] = as.character(deparse(substitute(var1)))    
+   names(final_df)[names(final_df) == var1_y_new] = as.character(deparse(substitute(new_column)))    
+    return(final_df)
   
 }
 
