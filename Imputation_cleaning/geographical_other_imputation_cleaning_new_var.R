@@ -68,11 +68,11 @@ null_trauma=trauma[ (is.na(trauma$injury_zip_tr5_6) &
                    is.na(trauma$ems_service_name_tr7_3_y)) &
                  trauma$inter_facility_transfer_tr25_54 == 'Yes',]
 
-trauma=trauma[ !(is.na(trauma$injury_zip_tr5_6) &
-            (is.na(trauma$injury_county_tr5_9) | trauma$injury_county_tr5_9 == 'Not Applicable') &
-             is.na(trauma$facility_name) &
-              is.na(trauma$ems_service_name_tr7_3_y)) &
-              trauma$inter_facility_transfer_tr25_54 == 'No',]
+#trauma=trauma[ !(is.na(trauma$injury_zip_tr5_6) &
+#            (is.na(trauma$injury_county_tr5_9) | trauma$injury_county_tr5_9 == 'Not Applicable') &
+#             is.na(trauma$facility_name) &
+#              is.na(trauma$ems_service_name_tr7_3_y)) &
+#              trauma$inter_facility_transfer_tr25_54 == 'No',]
 
 #---------------------------------------------------------------------------#
 #                       Analysis                                            #
@@ -84,9 +84,6 @@ trauma=trauma[ !(is.na(trauma$injury_zip_tr5_6) &
 #               Still 285 missing injury zip codes missing                  #  
 #---------------------------------------------------------------------------#
 
-#trauma$injury_zip_imp = trauma$injury_zip_tr5_6
-#trauma$ems_imp = trauma$ems_service_name_tr7_3_y
-#trauma$facility_imp = trauma$facility_name
 source("C:/Users/User/Documents/VHS-practicum-code/Imputation_cleaning/function_impute_zip_ems_facility.R")
 
 trauma=unique_entry(df=trauma, 
@@ -116,7 +113,7 @@ trauma=unique_entry(df=trauma,
                     distinct_var2 = injury_county_tr5_9, 
                     key_var =incident_id,
                     new_column=injury_zip_imp2)
-sum(is.na(trauma$injury_zip2))
+sum(is.na(trauma$injury_zip_imp2))
 
 #---------------------STEP Iv - Imputation for ems service name ------------#
 # Find most common zip codes for each ems and impute ems service name       #
@@ -171,7 +168,6 @@ trauma = trauma %>%
   plyr::rename(c("injury_zip_imp2" = "injury_zip_imp", "ems_imp1" = "ems_imp",
                "facility_imp1" = "facility_imp"))
 
-trauma=rbind(trauma, null_trauma, remove_trauma)
 
 #---------------------------------------------------------------------------------------------------#
 #REMOVE ALL INTERFACILITY TRANSFER
@@ -233,9 +229,9 @@ trauma=trauma %>%
 #---------------------------------------------------------------------------------------------------#
 #Check the missing values in facility, ems service and zip code
 #---------------------------------------------------------------------------------------------------#
-sum(is.na(trauma$facility_name_y))
-sum(is.na(trauma$ems_service_name_tr7_3_y))
-sum(is.na(trauma$injury_zip_tr5_6))
+sum(is.na(trauma$facility_imp))
+sum(is.na(trauma$ems_imp))
+sum(is.na(trauma$injury_zip_imp2))
 
 
 library(RPostgreSQL)
