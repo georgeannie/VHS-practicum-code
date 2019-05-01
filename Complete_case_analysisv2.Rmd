@@ -1,0 +1,1091 @@
+---
+title: "VHS"
+author: "VCU MASTERS IN DECISION ANALYTICS, 2019 PROJECT FOR VCU HEALTH SYSTEMS"
+date: "4/22/2019"
+output: html_document
+---
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages,  include=FALSE }
+library('RPostgreSQL')
+library(glue)
+library(DT)          # For Data Tables
+library(lattice)     # The lattice add-on of Trellis graphics for R
+library(knitr)       # For Dynamic Report Generation in R 
+library(gplots)      # Various R Programming Tools for Plotting Data
+library(ggplot2)     # An Implementation of the Grammar of Graphics 
+library(ClustOfVar)  # Clustering of variables 
+library(ape)         # Analyses of Phylogenetics and Evolution (as.phylo) 
+library(Information) # Data Exploration with Information Theory (Weight-of-Evidence and Information Value)
+library(ROCR)        # Model Performance and ROC curve
+library(caret)       # Classification and Regression Training -  for any machine learning algorithms
+library(randomForest)# Leo Breiman and Cutler's Random Forests for Classification and Regression 
+library(DAAG)        # Data Analysis and Graphics Data and Functions
+library(vcd)         # Visualizing Categorical Data
+library(kernlab)     # Support Vector Machine```
+library(dplyr)
+library(lubridate)
+library(Information)
+library(scorecard)
+library(woe)
+library(tidyverse)
+options(kableExtra.latex.load_packages = FALSE)
+library(kableExtra)
+library(plotly)
+set.seed(900)
+source("C:/Users/User/Documents/VHS-practicum-code/function_aws_rds_access.R")
+```
+
+#Part I: Retrieve Data from AWS
+```{r retrieve}
+
+
+pg = dbDriver("PostgreSQL")
+con=dbConnect(pg,
+              dbname = "vhs",
+              host=host,
+              user = user,
+              password = password)
+
+# #----------------------READ ALL ROWS FROM IMPUTED TABLE --------------#
+new_set=dbGetQuery(con, 'select * from feature_set_trauma')
+print("Dataset Variables/Fields")
+knitr::kable(names(new_set))
+```
+
+
+```{r, include=FALSE}
+#convert to factors
+new_set = new_set %>%
+  mutate( transport_to_your_facility = as.factor(transport_to_your_facility_by_tr8_8), 
+          drug_use_indicator_tr18_45 = as.factor(drug_use_indicator_tr18_45),
+          alcohol_intervention_alcohol_screen_tr18_46 = as.factor(alcohol_intervention_alcohol_screen_tr18_46),
+          patient_age_units_tr1_14 = as.factor(patient_age_units_tr1_14), 
+          patient_gender_tr1_15 = as.factor(patient_gender_tr1_15), 
+          hospital_discharge_disposition_tr25_27 = as.factor(hospital_discharge_disposition_tr25_27), 
+          ed_acute_care_disposition_tr17_27 = as.factor(ed_acute_care_disposition_tr17_27), 
+          financial_primary_method_of_payment_tr2_5 = as.factor(financial_primary_method_of_payment_tr2_5), 
+          ed_death_tr27_14 = as.factor(ed_death_tr27_14),
+          prehospital_gcs_eye_num = as.factor(prehospital_gcs_eye_num),
+          prehospital_gcs_motor_num  = as.factor(prehospital_gcs_motor_num),
+          prehospital_gcs_verbal_num = as.factor(prehospital_gcs_verbal_num),
+          prehospital_gcs_total_manual_tr18_64 = as.factor(prehospital_gcs_total_manual_tr18_64),
+          icu_days_total_tr26_9 = as.numeric(icu_days_total_tr26_9)
+)
+
+```
+
+#Part II: Data Cleaning/Preparation
+##1. Number of Missing values in the original dataset 
+```{r}
+print("Number of rows in orginal dataset")
+dim(new_set)[1]
+
+na_set = new_set %>%
+  dplyr::select(injury_zip_tr5_6, facility_name,
+          prehospital_gcs_eye_num, prehospital_gcs_motor_num, prehospital_gcs_verbal_num,
+         prehospital_pulse_oximetry_tr18_82, prehospital_pulse_rate_tr18_69,
+         prehospital_respiratory_rate_tr18_70, prehospital_sbp_tr18_67,
+         hospital_discharge_date_tr25_34, hospital_discharge_orders_written_date_tr25_93,
+         hospital_discharge_disposition_tr25_27,
+         ed_acute_care_admission_date_tr18_55,
+         ed_acute_care_disposition_tr17_27) %>%
+  summarise(injury_zip = sum(is.na(injury_zip_tr5_6)),
+            facility_name = sum(is.na(facility_name)),
+            prehospital_gcs_eye_num = sum(is.na(prehospital_gcs_eye_num)),
+            prehospital_gcs_verbal_num = sum(is.na(prehospital_gcs_verbal_num)),
+            prehospital_gcs_motor_num = sum(is.na(prehospital_gcs_motor_num)),
+            prehospital_pulse_rate = sum(is.na(prehospital_pulse_rate_tr18_69)),
+            prehospital_sbp = sum(is.na(prehospital_sbp_tr18_67)),
+            prehospital_respiratory_rate_tr18_70 = sum(is.na(prehospital_respiratory_rate_tr18_70)),
+            prehospital_oximetry=sum(is.na(prehospital_pulse_oximetry_tr18_82)),
+            hospital_discharge_date = sum(is.na(hospital_discharge_date_tr25_34)),
+            hospital_discharge_orders = sum(is.na(hospital_discharge_orders_written_date_tr25_93)),
+            hospital_discharge_disposition=sum(is.na(hospital_discharge_disposition_tr25_27)),
+            ed_acute_care_admission_date = sum(is.na(ed_acute_care_admission_date_tr18_55)),
+            ed_acute_care_disposition =  sum(is.na(ed_acute_care_disposition_tr17_27))
+            )
+
+print("Missing values and counts")
+knitr::kable(na_set) %>%
+  kable_styling(latex_options = c("striped", "scale_down"))
+```
+
+##2. Removing the null values for geographical and patient condition. Geographical
+```{r}
+new_set = new_set %>% 
+  filter(!is.na(injury_zip_tr5_6) &
+         !is.na(facility_name) &
+           !is.na(prehospital_gcs_eye_num) &
+           !is.na(prehospital_gcs_motor_num) &
+           !is.na(prehospital_gcs_verbal_num) &
+           !is.na(prehospital_pulse_oximetry_tr18_82) &
+           !is.na(prehospital_pulse_rate_tr18_69) &
+           !is.na(prehospital_respiratory_rate_tr18_70) &
+           !is.na(prehospital_sbp_tr18_67) &
+           !is.na(rural_ind))
+print("Number of rows after removing missing values")
+dim(new_set)[1]
+```
+
+##3. Number of missing values after cleaning
+```{r}
+na_set = new_set %>%
+  dplyr::select(injury_zip_tr5_6, facility_name,
+          prehospital_gcs_eye_num, prehospital_gcs_motor_num, prehospital_gcs_verbal_num,
+         prehospital_pulse_oximetry_tr18_82, prehospital_pulse_rate_tr18_69,
+         prehospital_respiratory_rate_tr18_70, prehospital_sbp_tr18_67,
+         hospital_discharge_date_tr25_34, hospital_discharge_orders_written_date_tr25_93,
+         hospital_discharge_disposition_tr25_27,
+         ed_acute_care_admission_date_tr18_55,
+         ed_acute_care_disposition_tr17_27) %>%
+  summarise(injury_zip = sum(is.na(injury_zip_tr5_6)),
+            facility_name = sum(is.na(facility_name)),
+            prehospital_gcs_eye_num = sum(is.na(prehospital_gcs_eye_num)),
+            prehospital_gcs_verbal_num = sum(is.na(prehospital_gcs_verbal_num)),
+            prehospital_gcs_motor_num = sum(is.na(prehospital_gcs_motor_num)),
+            prehospital_pulse_rate = sum(is.na(prehospital_pulse_rate_tr18_69)),
+            prehospital_sbp = sum(is.na(prehospital_sbp_tr18_67)),
+            prehospital_respiratory_rate_tr18_70 = sum(is.na(prehospital_respiratory_rate_tr18_70)),
+            prehospital_oximetry=sum(is.na(prehospital_pulse_oximetry_tr18_82)),
+            hospital_discharge_date = sum(is.na(hospital_discharge_date_tr25_34)),
+            hospital_discharge_orders = sum(is.na(hospital_discharge_orders_written_date_tr25_93)),
+            hospital_discharge_disposition=sum(is.na(hospital_discharge_disposition_tr25_27)),
+            ed_acute_care_admission_date = sum(is.na(ed_acute_care_admission_date_tr18_55)),
+            ed_acute_care_disposition =  sum(is.na(ed_acute_care_disposition_tr17_27))
+            )
+na_set
+```
+```{r, include=FALSE}
+####------------------------------------------------------------------------#
+#### CONVERT DISCHARGE DATE, ADMISSION DATE, INCIDENT DATE TO MDY FORMAT    #
+#### POPULATE HOSPITAL DISCHARGE DATE WHICH IS NULL USING HOSPITAL DISCHARGE#
+#### ORDER WRITTEN                                                          #  
+####------------------------------------------------------------------------#
+
+new_set = new_set %>%
+  mutate(hospital_discharge_date_tr25_34 = mdy(hospital_discharge_date_tr25_34), 
+      ed_acute_care_discharge_date_tr17_25 = mdy(ed_acute_care_discharge_date_tr17_25), 
+      ed_acute_care_admission_date_tr18_55 = mdy(ed_acute_care_admission_date_tr18_55), 
+      hospital_discharge_orders_written_date_tr25_93 = 
+        mdy(hospital_discharge_orders_written_date_tr25_93)) 
+```
+
+
+```{r, include=FALSE}
+#convert fields to factors
+new_set = new_set %>%
+  mutate(ampt_score_Outcome = as.factor(ampt_score_Outcome),
+         AgeBin = as.factor(AgeBin),
+         gcs_severity_flag=as.factor(gcs_severity_flag),
+         Outcome = as.factor(Outcome),
+         vehicle_accident = as.factor(vehicle_accident),
+         transport_to_your_facility_by_tr8_8 =as.factor(transport_to_your_facility_by_tr8_8),
+         rural_ind = as.factor(rural_ind)
+         )
+summary(new_set)
+```
+#Part III. Data Analysis
+##1. Proportion of Helicopters used based on geography and outcome defined
+###The proportion of cases that need helicopter and that do not is very large. This is a highly imbalanced set and requires sampling if predictive modeling is considered
+
+#Unneccessary trips determined is 39%
+```{r}
+print("Actual numbers")
+table(new_set$transport_to_your_facility_by_tr8_8, new_set$Outcome)
+
+print("Proportion")
+prop.table(table(new_set$Outcome))
+```
+##2. Proportion of Rapid Transport required based on outcome without taking into account geography
+```{r}
+print("Actual Numbers")
+table(new_set$transport_to_your_facility_by_tr8_8, new_set$ampt_score_Outcome)
+
+print("Proportions")
+prop.table(table(new_set$ampt_score_Outcome))
+```
+```{r}
+op<-par(mfrow=c(1,2), new=TRUE)
+plot(as.numeric(new_set$ampt_score_Outcome), ylab="Need-DoNot_need_Helicopter", xlab="n", main="Need ~ Do Not Need Helicopter")
+hist(as.numeric(new_set$ampt_score_Outcome), breaks=2, 
+     xlab="Need      Do not need", col="blue", main = "Histogram of Need/Not Need Helicopter")
+```
+
+##3. Proportion of cases using Rapid Transport based on gcs scores
+```{r}
+print("GCS eye score")
+(table(new_set$prehospital_gcs_eye, new_set$ampt_score_Outcome))
+
+print("GCS motor score")
+(table(new_set$prehospital_gcs_motor, new_set$ampt_score_Outcome))
+
+print("GCS verbal score")
+(table(new_set$prehospital_gcs_verbal, new_set$ampt_score_Outcome))
+
+```
+##4. Proportion of cases using Rapid Transport based on Age
+```{r}
+table(new_set$AgeBin, new_set$ampt_score_Outcome)
+```
+```{r}
+#p=new_set %>%
+#  filter(Outcome == "Y") %>%
+p= ggplot(new_set, aes(x=AgeBin, ..count..)) +
+  geom_bar(aes(fill=ampt_score_Outcome),  position=position_dodge()) + 
+  ggtitle("Number of cases that require Rapid Transport")
+ggplotly(p)
+```
+
+##5. Proportion of cases using Rapid Transport based on Gender
+```{r}
+table(new_set$patient_gender_tr1_15, new_set$ampt_score_Outcome)
+```
+```{r}
+p= ggplot(new_set, aes(x=patient_gender_tr1_15, ..count..)) +
+  geom_bar(aes(fill=ampt_score_Outcome),  position=position_dodge()) + 
+  ggtitle("Number of cases that require Rapid Transport")
+ggplotly(p)
+```
+
+
+##6. Proportion of cases using Rapid Transport based on vehicle accident
+```{r}
+table(new_set$vehicle_accident, new_set$ampt_score_Outcome)
+```
+
+```{r}
+p= ggplot(new_set, aes(x=vehicle_accident, ..count..)) +
+  geom_bar(aes(fill=ampt_score_Outcome),  position=position_dodge()) + 
+  ggtitle("Number of cases that require Rapid Transport by vehicle accident")
+ggplotly(p)
+```
+
+##6. Analysis of Prehospital parameters based on the outcome
+```{r}
+library(plotly)
+op1=par(mfrow=c(4,2), new=TRUE)
+
+p=ggplot(new_set, aes(x=ampt_score_Outcome, y=prehospital_pulse_oximetry_tr18_82, col=ampt_score_Outcome)) +
+  geom_boxplot() +
+  ggtitle("Pulse Oximetry by AMPT OUTCOME")
+ggplotly(p)
+
+p=ggplot(new_set, aes(x=ampt_score_Outcome, y=prehospital_pulse_rate_tr18_69, 
+                      col=ampt_score_Outcome)) +
+  geom_boxplot()+
+  ggtitle("Pulse Rate by AMPT OUTCOME")
+ggplotly(p)
+
+p=ggplot(new_set, aes(x=ampt_score_Outcome, y=prehospital_respiratory_rate_tr18_70, 
+                      col=ampt_score_Outcome)) +
+  geom_boxplot() +
+  ggtitle("Respiratory Rate by AMPT OUTCOME")
+ggplotly(p)
+
+p=ggplot(new_set, aes(x=ampt_score_Outcome, y=prehospital_sbp_tr18_67, 
+                      col=ampt_score_Outcome)) +
+  geom_boxplot() +
+  ggtitle("Systolic Blood Pressure by AMPT OUTCOME") 
+ggplotly(p)
+
+```
+
+##7. Histograms of variations in prehospital parameters
+```{r}
+op1<-par(mfrow=c(4,2), new=TRUE)
+hist((new_set$prehospital_pulse_oximetry_tr18_82), breaks = 20, main = "oxi",xlab = "Oxi")
+hist(new_set$prehospital_respiratory_rate_tr18_70 , breaks = 20, main = "resp",xlab = "resp")
+hist(new_set$prehospital_pulse_rate_tr18_69, breaks = 20, main = "pulse",xlab = "pulse")
+hist(new_set$prehospital_sbp_tr18_67, breaks = 20, main = "sbp",xlab = "sbp")
+```
+
+##8. Analysis of the difference in prehospital parameters from normal for each age group based on the ampt outcome
+```{r}
+op1=par(mfrow=c(4,2), new=TRUE)
+
+p=ggplot(new_set, aes(x=ampt_score_Outcome, y=diff_from_normal_pulse, col=ampt_score_Outcome)) +
+  geom_boxplot() +
+  ggtitle("Difference in pulse rate from normal by age for each AMPT OUTCOME") 
+ggplotly(p)
+
+p=ggplot(new_set, aes(x=ampt_score_Outcome, y=diff_from_normal_resp, 
+                      col=ampt_score_Outcome)) +
+  geom_boxplot() +
+  ggtitle("Difference in respiratory rate from normal by age for each AMPT OUTCOME") 
+ggplotly(p)
+
+p=ggplot(new_set, aes(x=ampt_score_Outcome, y=diff_from_normal_sbp, 
+                      col=ampt_score_Outcome)) +
+  geom_boxplot() +
+  ggtitle("Difference in sbp from normal by age for each AMPT OUTCOME") 
+ggplotly(p)
+
+p=ggplot(new_set, aes(x=ampt_score_Outcome, y=diff_in_oximetry, 
+                      col=ampt_score_Outcome)) +
+  geom_boxplot() +
+  ggtitle("Difference in pulse oximetry from normal by age for each AMPT OUTCOME") 
+ggplotly(p)
+
+```
+
+##9. Histograms of variations in difference of prehospital parameters from normal by Age
+```{r}
+op2<-par(mfrow=c(2,2), new=TRUE)
+hist(new_set$diff_in_oximetry, breaks = 20, main = "oxi",xlab = "Oxi")
+hist((new_set$diff_from_normal_resp), breaks = 20, main = "resp",xlab = "resp")
+hist(new_set$diff_from_normal_pulse, breaks = 20, main = "pulse",xlab = "pulse")
+hist(new_set$diff_from_normal_sbp, breaks = 20, main = "sbp",xlab = "sbp")
+```
+
+```{r}
+#Convert outcome to numeric
+new_set = new_set %>%
+  mutate( ampt_score_Outcome_num = ifelse( ampt_score_Outcome == 'Y', 1, 0 ) )
+        
+```
+
+##Part IV. Prepare dataset for model by finding the important variables
+#1. Use only prehospital parameters to determine the triage score
+```{r}
+triage_score_set = new_set %>%
+ dplyr::select(vehicle_accident, patient_gender_tr1_15, AgeBin,  ampt_score_Outcome_num,  prehospital_gcs_motor_num, prehospital_gcs_eye_num,
+         prehospital_gcs_verbal_num, prehospital_pulse_oximetry_tr18_82, 
+         prehospital_pulse_rate_tr18_69,
+         prehospital_respiratory_rate_tr18_70, prehospital_sbp_tr18_67, diff_from_normal_pulse,
+         diff_from_normal_sbp, diff_from_normal_resp, diff_in_oximetry)
+```
+
+#2. Definitions
+##2.1 Weight of evidence (WOE)
+This is basically a technique that can be applied if we have a binary response variable and any kind of predictor variable. First we perform a reasonable binning on the response variable and then decide which form of the binary response we count as positive and which as negative. Then we calculate the percentage positive cases in each bin of the total of all positive cases. For example 20 positive cases in bin A out of 100 total positive cases in all bins equals 20 %. Next we calculate the percentage of negative cases in each bin of the total of all negative cases, for example 5 negative cases in bin A out of a total of 50 negative cases in all bins equals 10%. Then we calculate the WOE by dividing the bin percentages of positive cases by the bin percentage of negative cases, and take the logarithm. For the described example log(20/10).
+
+Rule of thump: If WOE values are negative, negative cases supersede the positive cases. If WOE values are positive, positive cases supersede the negative cases.
+
+This serves the following purposes:
+- We eliminate any none-linear relationships
+- We automatically scale all variables too some extend
+- We convert categorical variables to contineous variables
+- Missing Data can be handled as just another factor value
+- We can built a stand alone score card, that could be manually applied by a person with a pen and a printout of all relevant variables.
+
+It has the following disadvantages:
+- We always loose information via binning
+- Score development along single variables is not contineous and occurs in steps
+- Binning requires manual revision
+- Calculating Variable importance is not as straight forward as with classical logistic regression with regularly scaled variables
+
+##2.2 Information Value (IV)
+By doing another sequence of calculations similar to the WOE calculation we can calculate the IV. Classically this serves as variable ranking method and allows us to perform feature selection, which is less compuationally demanding as other methods.
+
+Information Value	Predictive Power
+< 0.02	useless for prediction
+0.02 - 0.1	weak predictor
+0.1 - 0.3	medium predictor
+0.3 - 0.5	strong predictor
+> 0.5	suspicious too good to be true
+
+##2.3 Scoring
+The score is the converted prediction of the model into a score value. The score is of a given arbitrary range with a defined slope and is normally distributed. The score reflects the increase or decrease in odds, with High Score Values reflect a low probability of a modelled event.
+
+The score comes with a scorecard in which all contibuting variables are represented and linked to a specific score value. The sum of all score values that can be attributed to each variable is the total score. For example the credit score of an 18-year-old customer falls into the 18-25 age bin, a group with increased credit risk which reduces the overall credit score by 50 points. Such a score card is sufficient to calculate the total score if one has the values of all variables that contribute to the score.
+
+##3. Information Value
+a. As per the information value for each field, gender and vehicle accident are at the bottom. But business knowledge considers this still important. Hence these will be allowed as part of modelling unless deemed not useful by other statistical measures.
+b. The measures of differences from normal for each prehospital parameters is also low in comparison to the raw prehospital data provided. Hence this will be modeled as a different set.
+```{r}
+iv = iv(triage_score_set, y = 'ampt_score_Outcome_num') %>%
+  as_tibble() %>%
+  mutate( info_value = round(info_value, 3) ) %>%
+  arrange( desc(info_value) )
+
+iv %>%
+  knitr::kable()
+```
+##4. New model set with raw prehospital data
+```{r}
+triage_score_set_raw=triage_score_set %>%
+  dplyr::select(AgeBin, patient_gender_tr1_15,prehospital_gcs_motor_num,prehospital_gcs_verbal_num,
+                prehospital_gcs_eye_num, prehospital_pulse_oximetry_tr18_82,prehospital_respiratory_rate_tr18_70, prehospital_sbp_tr18_67, prehospital_pulse_rate_tr18_69, vehicle_accident, ampt_score_Outcome_num)
+```
+
+##5. Partition data into train and test set and bin the numericals to categoricals based on WOE
+```{r}
+div_part_1 = createDataPartition(y = triage_score_set_raw$ampt_score_Outcome_num, p = 0.75, list = F)
+
+# Training Sample
+train_1 <- triage_score_set_raw[div_part_1,] 
+pct(train_1$ampt_score_Outcome_num)
+
+bins_train = woebin(train_1, y = 'ampt_score_Outcome_num')
+
+# Test Sample
+test_1 <- triage_score_set_raw[-div_part_1,] # rest of the 30% data goes here
+pct(test_1$ampt_score_Outcome_num)
+
+bins_test = woebin(test_1, y = 'ampt_score_Outcome_num')
+```
+
+##6. Bins created for each variable and the WOE (weight of evidence). Created based on recursive partitioning
+
+```{r}
+woebin_plot(bins_train$prehospital_pulse_oximetry_tr18_82)
+```
+
+```{r}
+woebin_plot(bins_train$prehospital_pulse_rate_tr18_69)
+```
+
+```{r}
+woebin_plot(bins_train$prehospital_respiratory_rate_tr18_70)
+```
+
+```{r}
+woebin_plot(bins_train$prehospital_sbp_tr18_67)
+```
+```{r}
+woebin_plot(bins_train$prehospital_gcs_eye_num)
+```
+```{r}
+woebin_plot(bins_train$prehospital_gcs_motor_num)
+```
+```{r}
+woebin_plot(bins_train$prehospital_gcs_verbal_num)
+```
+```{r}
+woebin_plot(bins_train$vehicle_accident)
+```
+```{r}
+woebin_plot(bins_train$patient_gender_tr1_15)
+```
+```{r}
+woebin_plot(bins_train$AgeBin)
+```
+
+##7. Create new dataframe using the WOE data for training set, test set and the overall data
+```{r, results="hide"}
+data_woe_train = woebin_ply( train_1, bins_train )
+data_woe_test = woebin_ply( test_1, bins_test ) 
+
+bins_both = woebin(triage_score_set_raw, y = 'ampt_score_Outcome_num')
+
+data_woe_both = woebin_ply(triage_score_set_raw ,bins_both)
+```
+#PART V. LOGISTICS REGRESSION MODELLING USING THE BINS FOR TRIAGE SCORE 
+##1. Using all variables
+```{r, results="hide"}
+m1 = glm(ampt_score_Outcome_num ~. , 
+         data=data_woe_train,family=binomial())
+m1 = step(m1)
+```
+
+```{r}
+summary(m1)
+```
+
+##1a. Model 2 - without the respiratory rate
+```{r, results="hide"}
+m1 = glm(ampt_score_Outcome_num ~. -prehospital_respiratory_rate_tr18_70_woe - prehospital_gcs_eye_num_woe , 
+         data=data_woe_train,family=binomial())
+m1 = step(m1)
+```
+```{r}
+summary(m1)
+```
+
+##2. Significant variables based on p-value
+```{r}
+significant.variables <- summary(m1)$coeff[-1,4] < 0.01
+names(significant.variables)[significant.variables == TRUE]
+```
+
+##3. Save the logit, odds and probabilities of the training set
+```{r}
+pred=predict(m1)
+prob <- predict(m1, type = "response")
+res <- residuals(m1, type = "deviance")
+
+resp = tibble( logit = pred
+              , odds = exp(pred)
+              , prob = odds / (odds + 1)
+              , prob_ctrl = prob )
+
+resp
+
+#Plot Residuals
+plot(predict(m1), res,
+     xlab="Fitted values", ylab = "Residuals",
+     ylim = max(abs(res)) * c(-1,1))
+```
+##4. Confidence interval
+```{r}
+## CIs using profiled log-likelihood
+confint(m1)
+```
+
+##5. Test accuracy of model usig ROC curve
+```{r}
+#score test data set
+data_woe_test$m1_score <- predict(m1,type='response',data_woe_test)
+m1_pred <- prediction(data_woe_test$m1_score, data_woe_test$ampt_score_Outcome_num)
+m1_perf <- ROCR::performance(m1_pred,"tpr","fpr")
+
+#ROC
+plot(m1_perf, lwd=2, colorize=TRUE, main="ROC m1: Logistic Regression Performance")
+lines(x=c(0, 1), y=c(0, 1), col="red", lwd=1, lty=3);
+lines(x=c(1, 0), y=c(0, 1), col="green", lwd=1, lty=4)
+```
+#5a. Test accuracy of model using test data using Confustion matrix - 76%
+```{r}
+pred_lr = predict(m1,type='response', data_woe_test)
+
+accuracy = table(pred_lr > 0.5, data_woe_test$ampt_score_Outcome_num)
+
+print("Accuracy using logistic regression to determine scores")
+sum(diag(accuracy))/sum(accuracy)
+```
+
+##6. Plot precision/recall curve
+```{r}
+# Plot precision/recall curve
+m1_perf_precision <- ROCR::performance(m1_pred, measure = "prec", x.measure = "rec")
+plot(m1_perf_precision, main="m1 Logistic:Precision/recall curve")
+```
+
+##7. Plot accuracy as function of threshold
+```{r}
+# Plot accuracy as function of threshold
+m1_perf_acc <- ROCR::performance(m1_pred, measure = "acc")
+plot(m1_perf_acc, main="m1 Logistic:Accuracy as function of threshold")
+```
+
+##8. AUROC, GINI to check model performance
+```{r}
+#KS, Gini & AUC m1
+m1_KS <- round(max(attr(m1_perf,'y.values')[[1]]-attr(m1_perf,'x.values')[[1]])*100, 2)
+m1_AUROC <- round(ROCR::performance(m1_pred, measure = "auc")@y.values[[1]]*100, 2)
+m1_Gini <- (2*m1_AUROC - 100)
+cat("AUROC: ",m1_AUROC,"\tKS: ", m1_KS, "\tGini:", m1_Gini, "\n")
+```
+```{r}
+saveRDS(m1, "score_model.rds")
+```
+
+#PART V : TRIAGE SCORE CARD
+##1. Define the base points, odds and points to double the score
+Scoring is a bit counter intuitive the higher the score value the lower is the probability. Thus the highest score value will be associated with the lowest odds value. So when deciding on target score ( ts ), target odds( to ) and slope( pdo ) we are actually just defining a starting value and then decrease these values gradually by the rate of the slope until we cover the whole odds range. If we decide on a low target score with a steep slope we will again end up with negative values at the lower end of the score.
+```{r}
+points_1= 500
+odds_1 = 15
+pd_1 = 30
+```
+
+##2. Convert logit to score card
+```{r}
+score_card = scorecard( bins_train , m1, 
+                        points = points_1,  
+                        odds = 1/odds_1,  
+                        pd = pd_1
+                  )
+score_card
+sc = scorecard_ply( train_1, score_card )
+```
+##3. Add the score to the dataframe containing logit, odds and probability
+```{r}
+resp$score = sc[[1]]
+summary(resp)
+```
+
+##4. Calculate the scores via manual process to ensure the score defined above is correct
+```{r}
+factor = pd_1 / log(2)
+offset = points_1 - factor * log( odds_1 )
+
+resp$score_ctrl = offset - factor * resp$logit
+head(resp)
+```
+
+#PART VI: PLOTS TO UNDERSTAND SCORE VALUES
+Here we will compare the distributions and relationships between odds, score, logit and probability in order to better undestand the score values.
+##1. Logit vs. Odds, Probabilities and Score
+We can see that the score is perfectly linearly correlated with the logit
+```{r}
+resp = resp %>%
+ dplyr::select( - ends_with('_ctrl') )
+
+resp %>%
+  gather( key = 'key', value = 'value', - logit ) %>%
+  ggplot( aes( logit, value, color = key) ) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~key, scales = 'free_y')
+```
+
+##2.Odds vs. scaled Logit, Probabilities and Scores  
+We can see that the relationship between odds and score and odds and logit is identical
+```{r}
+resp %>%
+  mutate( score = score * - 1 ) %>%
+  gather( key = 'key', value = 'value', - odds ) %>%
+  ggplot( aes( odds, value, color = key) ) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~key, scales = 'free_y')
+```
+```{r}
+resp %>%
+  mutate( score = score * - 1 ) %>%
+  mutate_at( vars(logit, prob, score), scale ) %>%
+  gather( key = 'key', value = 'value', - odds ) %>%
+  ggplot( aes( odds, value, color = key) ) +
+  geom_point( alpha = 0.5 ) +
+  geom_line() 
+```
+
+##3. Histograms of logits, odds, score and probability
+```{r}
+resp %>%
+  gather( key = 'key', value = 'value' ) %>%
+  ggplot( aes(value) ) +
+    geom_histogram( bins = 50
+                    , fill = 'aquamarine3'
+                    , color = 'black' ) +
+    geom_rug()+
+    facet_wrap(~key, scales = 'free')
+```
+##4. Check if score and logit overlaps
+Logit and score overlaps perfectly for the most part but does not overlap for higher scores
+```{r}
+resp %>%
+  dplyr::select( logit, score ) %>%
+  mutate_all( scale, center = T ) %>%
+  mutate_all( as.vector ) %>%
+  gather( key = 'key', value = 'value' ) %>%
+  ggplot( )+
+    geom_histogram( aes( x = value, fill = key )
+                    , bins = 50
+                    , position="identity"
+                    , alpha = 0.5 )
+```
+
+##5. Integrate the score with the original dataset
+```{r}
+data_woe_both = data_woe_both %>% as_tibble()
+data_relevant = data_woe_both[, names( coef(m1) )[-1] ]
+
+data_mult_logit = as_tibble(data_relevant * coef(m1)[-1])
+data_mult_logit
+```
+
+```{r}
+data_mult_score = data_mult_logit %>%
+  mutate_all( function(x) - factor * x ) %>%
+  mutate( intercept = coef(m1)[1]
+          , intercept = offset - factor * intercept )
+
+score = apply( data_mult_score, 1, sum ) 
+
+data_mult_score$score = score
+
+
+data_mult_score %>%
+  select( score, intercept, everything()) %>%   
+  head(10)
+```
+
+```{r}
+# correct variable names
+
+new_names_score = names(data_mult_score) %>%
+  str_replace_all( '_woe', '')
+
+new_names_data_relevant = names(data_relevant) %>%
+  str_replace_all( '_woe', '')
+
+
+names(data_mult_score) <- new_names_score
+
+names(data_relevant) <- new_names_data_relevant
+
+obs1_woe = data_relevant %>%
+  mutate( rwn = row_number() ) %>%
+  select( rwn, everything() ) # %>%
+#  f_manip_transpose_tibble()
+
+obs1_values = new_set %>%
+  mutate( rwn = row_number() ) %>%
+  select( rwn, everything() )  %>%
+  as_tibble() 
+```
+
+```{r}
+obs1_score = data_mult_score %>%
+  mutate( rwn = row_number() ) %>%
+  select( rwn, everything() )
+
+
+final_score_and_outcome=obs1_score %>%
+  left_join( obs1_values, by = 'rwn') 
+head(final_score_and_outcome)
+```
+
+##6. Plot the scores and the Triage outcome
+```{r}
+newx=seq(min(final_score_and_outcome$score),
+         max(final_score_and_outcome$score))
+
+count=as.matrix(table(cut(final_score_and_outcome$score,
+                          25), final_score_and_outcome$ampt_score_Outcome_num))
+
+barplot(t(count),
+        main="Scores versus probability of taking rapid transport",
+        xlab="Scores",
+        ylab="observed number of patients",
+        col=c("lightblue", "red"))
+legend("topright", fill=c("red", "lightblue", NA),
+        lty=c(NA, NA, 1), lwd=c(NA, NA, 2),
+        legend=c("Need rapid transport", "Do not need rapid transport",
+                  "Predicted Prob"),
+        col=c("black"),
+        border=c("black", "black", NA))
+```
+
+#Part VII: Over Utilization using triage score and geographical information
+####The over utilization analysis uses only those cases that utilized the HEMS transportation (167 cases)
+
+##1. Plot the outcome (using geographical information) and score
+There is no pattern of score for the utilization of HEMS
+```{r}
+util_set = final_score_and_outcome %>%
+  filter(!transport_to_your_facility_by_tr8_8 == 'Medevac/HEMS')
+
+
+count=as.matrix(table(cut(util_set$score,
+                          25), util_set$Outcome))
+
+barplot(t(count),
+        main="Scores versus probability of taking helicopter",
+        xlab="Scores",
+        ylab="observed number of patients",
+        col=c("lightblue", "red"))
+legend("topright", fill=c("red", "lightblue", NA),
+        lty=c(NA, NA, 1), lwd=c(NA, NA, 2),
+        legend=c("Need Helicopter", "Do not need Helicopter"),
+        col=c("black"),
+        border=c("black", "black", NA))
+
+```
+
+##2. Plot the outcome vs Score by the rapid transport decision
+Those that required HEMS transportation and was also determined that they require rapid transportation, had lower scores than those who was determined otherwise
+```{r}
+ggplot(util_set)+
+  geom_boxplot(aes(y=score,x=Outcome,fill=Outcome),outlier.size=0.1,notch=T,notchwidth=0.8)+
+  facet_grid(~ampt_score_Outcome,margins=T)+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  ylab(label='Score')+
+  xlab('Outcome')+
+  ggtitle('Score distribution vs Outcome for each Rapid Transport decision')
+```
+#PART VIII: SCORE AND UTILIZATION OF RESOURCES INCLUDING GEOGRAPHIC COMPONENT 
+##1. Create new dataset with required fields and score.
+```{r, results="hide"}
+set.seed(1234)
+resource_util = final_score_and_outcome %>%
+  select(score, rural_ind, drive_dist_to_facility, ground_time_to_facility, ems_notify_time_hour, ems_unit_notified_time_hr, ems_unit_notified_time_of_day, diff_from_normal_pulse, diff_from_normal_resp, diff_from_normal_sbp, diff_in_oximetry, trauma_level, transport_to_your_facility_by_tr8_8, AgeBin.y, vehicle_accident.y, patient_gender_tr1_15.y, Outcome, ampt_score_Outcome, ampt_score_Outcome_num, gcs_severity_flag, incident_date_tr5_1 )
+
+resource_util$Outcome_num=ifelse(resource_util$Outcome == 'Y', 1, 0)
+```
+
+#2. Add day of the week using the incident date as additional predictor
+```{r, results="hide"}
+resource_util$incident_weekday= wday(final_score_and_outcome$incident_date_tr5_1)
+```
+
+#3. Divide the cases into test and train
+```{r, results="hide"}
+div_part_1 = createDataPartition(y = resource_util$Outcome, p = 0.75, list = F)
+
+# Training Sample
+train_1 <- resource_util[div_part_1,] 
+pct(train_1$Outcome)
+
+# Test Sample
+test_1 <- resource_util[-div_part_1,] # rest of the 30% data goes here
+pct(test_1$Outcome)
+```
+
+##4. Upsample to combat imbalance and perform logistic regression.
+```{r}
+util_glm = train(Outcome ~ +score +rural_ind +ems_notify_time_hour  +ems_unit_notified_time_of_day +diff_from_normal_pulse +diff_from_normal_resp +diff_from_normal_sbp +diff_in_oximetry  , 
+                 method = "glm", family = "binomial",
+                  data = train_1, tuneLength=5,
+                  trControl = trainControl(method = "none",
+                                           sampling = "up"))
+
+summary(util_glm)
+```
+
+##4b. Test accuracy of model usig ROC curve
+```{r}
+#score test data set
+util_score <- predict(util_glm,type='raw')
+util_pred <- prediction(as.numeric(util_score), train_1$Outcome_num)
+util_perf <- ROCR::performance(m1_pred,"tpr","fpr")
+
+#ROC
+plot(util_perf, lwd=2, colorize=TRUE, main="ROC m1: Logistic Regression Performance")
+lines(x=c(0, 1), y=c(0, 1), col="red", lwd=1, lty=3);
+lines(x=c(1, 0), y=c(0, 1), col="green", lwd=1, lty=4)
+```
+
+##4c. Plot precision/recall curve
+```{r}
+# Plot precision/recall curve
+util_perf_precision <- ROCR::performance(util_pred, measure = "prec", x.measure = "rec")
+plot(util_perf_precision, main="m1 Logistic:Precision/recall curve")
+```
+
+##4d. Plot accuracy as function of threshold
+```{r}
+# Plot accuracy as function of threshold
+util_perf_acc <- ROCR::performance(util_pred, measure = "acc")
+plot(util_perf_acc, main="m1 Logistic:Accuracy as function of threshold")
+```
+
+##4e. AUROC, GINI to check model performance - 72%
+```{r}
+#KS, Gini & AUC m1
+util_KS <- round(max(attr(util_perf,'y.values')[[1]]-attr(util_perf,'x.values')[[1]])*100, 2)
+util_AUROC <- round(ROCR::performance(util_pred, measure = "auc")@y.values[[1]]*100, 2)
+util_Gini <- (2*util_AUROC - 100)
+cat("AUROC: ",util_AUROC,"\tKS: ", util_KS, "\tGini:", util_Gini, "\n")
+```
+##4f. Accuracy of model using confusion matrix - 88%
+```{r}
+pred_util = predict(util_glm,type='raw', test_1)
+
+accuracy = table(pred_util, test_1$Outcome_num)
+
+print("Accuracy using logistic regression to determine scores")
+sum(diag(accuracy))/sum(accuracy)
+```
+
+```{r}
+saveRDS(util_glm, "util_glm.RDS")
+```
+
+
+##5. Random Forest 
+5a. upsample
+```{r, results="hide", warning=FALSE}
+
+up_resource <- upSample(x = resource_util[, -17],
+                     y = resource_util$Outcome)                         
+table(up_resource$Outcome) 
+
+
+up_resource = up_resource %>%
+  filter(!is.na(drive_dist_to_facility)) %>%
+  select(-ems_unit_notified_time_hr, -trauma_level)
+
+```
+
+#5b. Create test and train set
+```{r}
+div_part_1 = createDataPartition(y = up_resource$Class, p = 0.75, list = F)
+
+# Training Sample
+train_1 <- up_resource[div_part_1,] 
+pct(train_1$Class)
+
+# Test Sample
+test_1 <- up_resource[-div_part_1,] # rest of the 30% data goes here
+pct(test_1$Class)
+```
+
+5c. Random Forest - Out of bag
+```{r}
+mtry <- seq(4, ncol(train_1) * 0.5, 2)
+nodesize = seq(3, 8, 2)
+sampsize = nrow(train_1) * c(0.7, 0.8)
+
+#----------Create a data frame containing all combinations 
+hyper_grid = expand.grid(mtry = mtry, nodesize = nodesize, sampsize = sampsize)
+
+#---- Create an empty vector to store OOB error values
+oob_err = c()
+
+#----------loop over the rows of hyper_grid to train the grid of models
+y=train_1$Class
+x=train_1 %>%
+  dplyr::select(-Outcome_num, -Class, -incident_date_tr5_1, -transport_to_your_facility_by_tr8_8, -AgeBin.y, -vehicle_accident.y, -patient_gender_tr1_15.y, -drive_dist_to_facility, -ground_time_to_facility, -ampt_score_Outcome_num, -ampt_score_Outcome)%>%
+  mutate(incident_weekday = as.factor(incident_weekday),
+         ems_unit_notified_time_of_day = as.factor(ems_unit_notified_time_of_day))
+
+for (i in 1:nrow(hyper_grid)) {
+
+#------------- Train a Random Forest model
+  model <- randomForest(y=y, x=x,
+                        mtry = hyper_grid$mtry[i],
+                        nodesize = hyper_grid$nodesize[i],
+                        sampsize = hyper_grid$sampsize[i])
+  
+#-------------- Store OOB error for the model                      
+  oob_err[i] <- model$err.rate[nrow(model$err.rate), "OOB"]
+}
+
+```
+
+
+##5d. Use best model hyperparameters
+```{r}
+#--------------- Identify optimal set of hyperparmeters based on OOB error
+opt_i <- which.min(oob_err)
+print(hyper_grid[opt_i,])
+
+mod_rf=randomForest(y=y, x=x, mtry = 6, nodesize=3,
+                    tuneLength=5, importance = TRUE)
+mod_rf
+
+print("Accuracy of training/validation model")
+mod_rf$confusion[, 'class.error']
+```
+
+#Check accuracy of model using test
+```{r}
+#----PREDICT USING THE RF MODEL
+test_1 = test_1 %>%
+  mutate(incident_weekday = as.factor(incident_weekday),
+         ems_unit_notified_time_of_day =as.factor(ems_unit_notified_time_of_day))
+
+predict1=predict(mod_rf, newdata =  test_1)
+
+#----FIND ACCURACY OF RF MODEL - 75%
+accuracy=table(predict1, test_1$Class)
+print("Accuracy using random forest to detemine prediction of utilization")
+sum(diag(accuracy))/sum(accuracy)
+```
+
+#5b. Plot Variable Importance as provided by the model with strength greater than 1% 
+```{r}
+# Extracts variable importance (Mean Decrease in Gini Index)
+# Sorts by variable importance and relevels factors to match ordering
+importance(mod_rf, scale = F)
+var_importance <- tibble(variable=setdiff(colnames(x), "Outcome"),
+                             importance=as.vector(importance(mod_rf, scale=FALSE)[,3]))
+var_importance <- var_importance %>%
+#  filter(importance > 1) %>%
+    arrange(desc(importance))
+var_importance$variable <- factor(var_importance$variable, levels=var_importance$variable)
+
+p <- ggplot(var_importance, aes(x=variable, weight=importance, fill=variable))
+p <- p + geom_bar() + ggtitle("Variable Importance from Random Forest Fit")
+p <- p + xlab("Geographic and Patient Attribute") + ylab("Variable Importance")
+p <- p + scale_fill_discrete(name="Variable Name")
+p + theme(axis.text.x=element_blank(),
+         # axis.text.y=element_text(size=12),
+          axis.text.y=element_blank(),
+          axis.title=element_text(size=16),
+          plot.title=element_text(size=18),
+          legend.title=element_text(size=16),
+          legend.text=element_text(size=12))
+        
+```
+
+##5c. Check accuracy of the model
+```{r}
+#---PREDICT PROBABILITIES FOR RF MODEL
+predict1=predict(mod_rf, test_1, type="prob")
+
+#----FIND AUC AND ROC SCORES 50%, 70% cm
+library(ROCR)
+forestpred=prediction(predict1[,2], test_1$Class)
+forestperf = performance(forestpred, "tpr", "fpr")
+
+forestperf = performance(forestpred, "auc")
+auc=unlist(slot(forestperf, "y.values"))
+print("AUC of random forest model using drivers determined by model")
+auc
+
+```
+
+
+
+```{r}
+util_set %>% filter(!is.na(rural_ind)) %>%
+ggplot(aes(x=Outcome, y=..count.., fill=rural_ind)) +
+  geom_bar(position = position_dodge()) +
+  scale_fill_manual(values = c('orange', 'grey')) +
+  theme_bw() +
+   theme(panel.background = element_blank()) +
+  theme(axis.line = element_blank()) +
+  ggtitle("Overutilization by rural/urban geography")
+
+```
+```{r}
+library(wesanderson)
+util_set %>% 
+ggplot(aes(x=Outcome, y=..count..)) +
+  geom_bar(aes(fill=ems_unit_notified_time_of_day), position = position_dodge()) +
+  scale_fill_manual(values=wes_palette(n=4, name = "Moonrise1"))
+```
+```{r}
+library(wesanderson)
+p=util_set %>% 
+ggplot(aes(x=Outcome, y=ground_time_to_facility)) +
+  geom_point(aes(col=Outcome)) 
+ggplotly(p)  
+```
+```{r}
+library(wesanderson)
+p=util_set %>% 
+ggplot(aes(x=Outcome, y=prehospital_gcs_total_manual_tr18_64, fill=Outcome)) +
+  geom_bar(stat="identity", position = position_dodge()) 
+ggplotly(p)  
+``` 
+
+#Final Results:
+##TRIAGE SCORE CARD - USING LOGISTIC MODEL AND WOE/IV METHOD
+MODEL PERFORMANCE IS 69%, MAX SCORING IS 500 POINTS
+BASE POINTS IS 283 POINTS WHICH SHOULD BE ADDED TO EACH OF THE SCORE BELOW 
+VARIABLES USED TO DETERMINE THE SCORE
+1. AGE
+2. GENDER
+3. VEHICLE ACCIDENT
+4. GCS MOTOR
+5. PULSE OXIMETRY
+6  SBP
+7. GCS VERBAL
+8. PULSE RATE
+```{r}
+base = score_card[[1]]
+score= rbind(score_card[[2]][,c(1,2, 13)],
+            score_card[[3]][,c(1,2, 13)],
+            score_card[[4]][,c(1,2, 13)],
+            score_card[[5]][,c(1,2, 13)],
+            score_card[[6]][,c(1,2, 13)],
+            score_card[[7]][,c(1,2, 13)],
+            score_card[[8]][,c(1,2, 13)],
+            score_card[[9]][,c(1,2, 13)])
+print("Base points (Intercept)")
+base
+
+print("score card")
+score
+```
+
+##OVERUTILIZATION WITH TRIAGE SCORE
+THE MOST IMPORTANT VARIABLES ARE DRIVE TIME TO FACILITY, SCORE, RURAL/URBAN INJURY ZIP, TIME OF THE DAY, DIFFERENCE FROM NORMAL SBP BY AGE, TOTAL GCS SCORE, DIFFERENCE FROM NORMAL RESPIRATORY BY AGE, DIFFERENCE FROM NORMAL PULSE BY AGE
+
+#PREDICTION MODEL FOR UTILIZATION
+```{r}
+saveRDS(m1, "utilization_model.rds")
+```
+
+
+                                                                                                                                                                                                                                                
+                                                                                                                                                                                                                                                
